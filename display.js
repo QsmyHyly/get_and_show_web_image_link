@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', function() {
   log('显示页面已加载');
   const imageGrid = document.getElementById('imageGrid');
   const imageCount = document.getElementById('imageCount');
-  const filterInput = document.getElementById('filterInput');
   const sortOptions = document.getElementById('sortOptions');
   const sortOrder = document.getElementById('sortOrder');
   const sortButton = document.getElementById('sortButton');
@@ -161,25 +160,23 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // 根据当前模式更新filteredImages数组
   function updateFilteredImages(useOriginal = false) {
-    const filterText = filterInput.value.toLowerCase();
-    
     // 如果使用原始数组（默认排序时）
     if (useOriginal && originalImages.length > 0) {
       log('使用原始图片数组进行显示');
-      filteredImages = originalImages.filter(url => url.toLowerCase().includes(filterText));
+      filteredImages = [...originalImages];
       return;
     }
     
     // 否则根据当前大小模式过滤
     switch (currentSizeMode) {
       case 'large':
-        filteredImages = largeImages.filter(url => url.toLowerCase().includes(filterText));
+        filteredImages = [...largeImages];
         break;
       case 'small':
-        filteredImages = smallImages.filter(url => url.toLowerCase().includes(filterText));
+        filteredImages = [...smallImages];
         break;
       case 'all':
-        filteredImages = [...largeImages, ...smallImages].filter(url => url.toLowerCase().includes(filterText));
+        filteredImages = [...largeImages, ...smallImages];
         break;
     }
   }
@@ -334,17 +331,7 @@ document.addEventListener('DOMContentLoaded', function() {
     alert(`已复制 ${filteredImages.length} 个链接到剪贴板`);
   });
   
-  // 筛选图片
-  filterInput.addEventListener('input', () => {
-    const filterText = filterInput.value.toLowerCase();
-    log('筛选图片', filterText);
-    
-    updateFilteredImages();
-    log(`筛选结果: ${filteredImages.length}/${largeImages.length + smallImages.length} 张图片`);
-    
-    imageCount.textContent = `显示 ${filteredImages.length}/${largeImages.length + smallImages.length} 张图片`;
-    displayImages(filteredImages);
-  });
+
   
   // 检查图片大小并分类（异步）
   async function checkImageSize(url) {
