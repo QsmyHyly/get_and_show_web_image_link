@@ -1,3 +1,38 @@
+// 树形缓存容器实现
+class TreeNode {
+  constructor(name) {
+    this.name = name;
+    this.children = {};
+  }
+
+  addChild(node) {
+    this.children[node.name] = node;
+  }
+
+  getChild(name) {
+    return this.children[name];
+  }
+}
+
+class CacheLeafNode extends TreeNode {
+  constructor(name) {
+    super(name);
+    this.cache = null;
+  }
+
+  setCache(data) {
+    this.cache = data;
+  }
+
+  getCache() {
+    return this.cache;
+  }
+
+  clearCache() {
+    this.cache = null;
+  }
+}
+
 // 日志函数
 function log(message, data = null) {
   const timestamp = new Date().toLocaleTimeString();
@@ -50,6 +85,11 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentSizeMode = 'large'; // 'large', 'small', 'all'
   const MIN_IMAGE_SIZE = 10000; // 100x100像素以下的视为小图片
   
+  // 初始化缓存树
+  const cacheTree = new TreeNode('root');
+  const sortCache = new CacheLeafNode('sortCache');
+  cacheTree.addChild(sortCache);
+
   // 从存储中获取图片链接
   log('开始从存储中获取图片链接');
   
@@ -57,6 +97,8 @@ document.addEventListener('DOMContentLoaded', function() {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "updateImages") {
       log(`收到更新图片消息，共 ${request.imageUrls.length} 张图片`);
+      // 清空所有缓存
+      sortCache.clearCache();
       
       // 接收所有图片链接并保存原始数组
       const allImages = request.imageUrls;
@@ -364,8 +406,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // 高效稳定的排序算法
+  // 带缓存的排序算法
   async function sortImagesBySize() {
+    // 检查缓存
+    const cacheKey = `size_${sortOrder.value}`;
+    const cachedResult = sortCache.getCache()?.[cacheKey];
+    if (cachedResult) {
+      log('使用缓存排序结果');
+      filteredImages = cachedResult;
+      return;
+    }
+
+    // 无缓存则执行排序
+    log('无缓存，执行实际排序');
     const order = sortOrder.value === 'asc' ? 1 : -1;
     log('开始按大小排序', {
       order: order === 1 ? '从小到大' : '从大到小',
@@ -402,7 +455,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 提取排序后的URL
     filteredImages = imageData.map(item => item.url);
-    log('按大小排序完成', {
+    
+    // 保存到缓存
+    if (!sortCache.getCache()) {
+      sortCache.setCache({});
+    }
+    sortCache.getCache()[cacheKey] = filteredImages;
+    
+    log('按大小排序完成并缓存', {
       firstImage: filteredImages[0],
       lastImage: filteredImages[filteredImages.length - 1]
     });
