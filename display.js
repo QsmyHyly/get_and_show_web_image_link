@@ -160,25 +160,27 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // 根据当前模式更新filteredImages数组
   function updateFilteredImages(useOriginal = false) {
-    // 如果使用原始数组（默认排序时）
     if (useOriginal && originalImages.length > 0) {
       log('使用原始图片数组进行显示');
       filteredImages = [...originalImages];
-      return;
+    } else {
+      // 根据当前大小模式过滤
+      switch (currentSizeMode) {
+        case 'large':
+          filteredImages = [...largeImages];
+          break;
+        case 'small':
+          filteredImages = [...smallImages];
+          break;
+        case 'all':
+          filteredImages = [...largeImages, ...smallImages];
+          break;
+      }
     }
-    
-    // 否则根据当前大小模式过滤
-    switch (currentSizeMode) {
-      case 'large':
-        filteredImages = [...largeImages];
-        break;
-      case 'small':
-        filteredImages = [...smallImages];
-        break;
-      case 'all':
-        filteredImages = [...largeImages, ...smallImages];
-        break;
-    }
+    log('更新过滤后的图片数组', {
+      mode: useOriginal ? 'original' : currentSizeMode,
+      count: filteredImages.length
+    });
   }
 
   // 显示图片
@@ -474,6 +476,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const sortType = sortOptions.value;
       log('排序类型', sortType);
       
+      // 在排序前先根据当前模式更新过滤后的图片
+      updateFilteredImages(sortType === 'default');
+      
       switch (sortType) {
         case 'size':
           await sortImagesBySize();
@@ -487,11 +492,9 @@ document.addEventListener('DOMContentLoaded', function() {
           break;
         case 'default':
           // 默认排序时使用原始图片数组
-          updateFilteredImages(true); // 传入true表示使用原始数组
+          // updateFilteredImages(true) 已经在上面调用
           break;
         default:
-          // 根据当前模式更新过滤后的图片
-          updateFilteredImages();
           break;
       }
       
