@@ -235,12 +235,7 @@ function runAllTests() {
 }
 
 // 如果直接运行此文件，执行所有测试
-if (require.main === module) {
-  console.log('===========');
-  console.log('| 树缓存模块测试 |');
-  console.log('===========');
-  console.log();
-  
+if (require.main === module) {  
   runAllTests();
 }
 
