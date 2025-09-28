@@ -3,196 +3,245 @@
  * 
  * 用法: node run-tests.js
  * 
- * 功能:
- * - 自动运行test目录下的所有测试文件
- * - 提供测试结果统计和报告
- * - 支持单独运行指定测试文件
+ * 这个文件运行所有tree-cache模块的测试
  */
 
 const fs = require('fs');
 const path = require('path');
-const { SimpleTestRunner } = require('./test/simple-test-runner');
 
-// 颜色输出函数
-const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m'
-};
-
-// 打印带颜色的文本
-function colorText(text, color) {
-  return `${color}${text}${colors.reset}`;
-}
-
-// 打印标题
-function printHeader(text) {
-  const line = '='.repeat(text.length + 4);
-  console.log('\n' + colorText(line, colors.cyan));
-  console.log(colorText(`| ${text} |`, colors.cyan + colors.bright));
-  console.log(colorText(line, colors.cyan) + '\n');
-}
-
-// 运行所有测试
-function runAllTests() {
-  printHeader('树缓存模块测试');
-  
-  const testDir = path.join(__dirname, 'test');
-  
-  // 检查test目录是否存在
-  if (!fs.existsSync(testDir)) {
-    console.error(colorText('错误: test目录不存在!', colors.red));
-    process.exit(1);
+class SimpleTestRunner {
+  constructor() {
+    this.totalTests = 0;
+    this.passedTests = 0;
+    this.failedTests = 0;
+    this.currentSuite = '';
+    this.currentSetupFunction = null;
   }
+
+  describe(suiteName, testFunction) {
+    this.currentSuite = suiteName;
+    console.log(`\n🏃 运行测试套件: ${suiteName}`);
+    console.log('─'.repeat(50));
+    
+    try {
+      testFunction();
+      console.log(`✅ ${suiteName} - 所有测试通过`);
+    } catch (error) {
+      console.log(`❌ ${suiteName} - 测试失败: ${error.message}`);
+    }
+    
+    console.log('─'.repeat(50));
+  }
+
+  it(testName, testFunction) {
+    this.totalTests++;
+    process.stdout.write(`  测试: ${testName} ... `);
+    
+    try {
+      // 在每个测试前执行beforeEach函数
+      if (this.currentSetupFunction) {
+        this.currentSetupFunction();
+      }
+      
+      testFunction();
+      console.log('✅ 通过');
+      this.passedTests++;
+    } catch (error) {
+      console.log('❌ 失败');
+      console.log(`     错误: ${error.message}`);
+      this.failedTests++;
+    }
+  }
+
+  expect(actual) {
+    const expectObj = {
+      toBe: (expected) => {
+        if (actual !== expected) {
+          throw new Error(`期望: ${expected}, 实际: ${actual}`);
+        }
+        return expectObj;
+      },
+      toEqual: (expected) => {
+        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+          throw new Error(`期望: ${JSON.stringify(expected)}, 实际: ${JSON.stringify(actual)}`);
+        }
+        return expectObj;
+      },
+      toBeDefined: () => {
+        if (actual === undefined) {
+          throw new Error('期望值已定义，但实际未定义');
+        }
+        return expectObj;
+      },
+      toBeUndefined: () => {
+        if (actual !== undefined) {
+          throw new Error(`期望值未定义，但实际为: ${actual}`);
+        }
+        return expectObj;
+      },
+      toBeNull: () => {
+        if (actual !== null) {
+          throw new Error(`期望为null，实际为: ${actual}`);
+        }
+        return expectObj;
+      },
+      toBeInstanceOf: (constructor) => {
+        if (!(actual instanceof constructor)) {
+          throw new Error(`期望实例为 ${constructor.name}，实际为 ${actual ? actual.constructor.name : actual}`);
+        }
+        return expectObj;
+      },
+      toContain: (expected) => {
+        if (!actual || !actual.includes(expected)) {
+          throw new Error(`期望包含: ${expected}，实际: ${actual}`);
+        }
+        return expectObj;
+      },
+      toBeGreaterThan: (expected) => {
+        if (actual <= expected) {
+          throw new Error(`期望 ${actual} 大于 ${expected}`);
+        }
+        return expectObj;
+      },
+      toBeLessThan: (expected) => {
+        if (!(actual < expected)) {
+          throw new Error(`期望 ${actual} 小于 ${expected}`);
+        }
+        return expectObj;
+      },
+      toThrow: (expectedError) => {
+        try {
+          if (typeof actual === 'function') {
+            actual();
+          }
+          throw new Error('期望函数抛出错误，但未抛出');
+        } catch (error) {
+          if (expectedError && error.message !== expectedError) {
+            throw new Error(`期望错误: "${expectedError}"，实际错误: "${error.message}"`);
+          }
+        }
+        return expectObj;
+      }
+    };
+
+    // 添加not属性，反转所有断言
+    expectObj.not = {
+      toBe: (expected) => {
+        if (actual === expected) {
+          throw new Error(`期望不等于: ${expected}, 但实际相等`);
+        }
+        return expectObj.not;
+      },
+      toEqual: (expected) => {
+        if (JSON.stringify(actual) === JSON.stringify(expected)) {
+          throw new Error(`期望不等于: ${JSON.stringify(expected)}, 但实际相等`);
+        }
+        return expectObj.not;
+      },
+      toBeDefined: () => {
+        if (actual !== undefined) {
+          throw new Error('期望值未定义，但实际已定义');
+        }
+        return expectObj.not;
+      },
+      toBeUndefined: () => {
+        if (actual === undefined) {
+          throw new Error('期望值已定义，但实际未定义');
+        }
+        return expectObj.not;
+      },
+      toBeNull: () => {
+        if (actual === null) {
+          throw new Error('期望不为null，但实际为null');
+        }
+        return expectObj.not;
+      },
+      toBeInstanceOf: (constructor) => {
+        if (actual instanceof constructor) {
+          throw new Error(`期望实例不是 ${constructor.name}，但实际是`);
+        }
+        return expectObj.not;
+      },
+      toContain: (expected) => {
+        if (actual && actual.includes(expected)) {
+          throw new Error(`期望不包含: ${expected}，但实际包含`);
+        }
+        return expectObj.not;
+      }
+    };
+
+    return expectObj;
+  }
+
+  beforeEach(setupFunction) {
+    // 在每个测试前执行setupFunction
+    this.currentSetupFunction = setupFunction;
+  }
+
+  printSummary() {
+    console.log('\n' + '='.repeat(50));
+    console.log('📊 测试汇总');
+    console.log('='.repeat(50));
+    console.log(`总测试数: ${this.totalTests}`);
+    console.log(`通过: ${this.passedTests} ✅`);
+    console.log(`失败: ${this.failedTests} ❌`);
+    
+    if (this.failedTests === 0) {
+      console.log('\n🎉 所有测试通过！');
+    } else {
+      console.log('\n💥 有测试失败，请检查错误信息');
+    }
+    
+    console.log('='.repeat(50));
+  }
+}
+
+// 加载并运行所有测试文件
+function runAllTests() {
+  const runner = new SimpleTestRunner();
+  const testDir = path.join(__dirname, 'test');
   
   // 获取所有测试文件
   const testFiles = fs.readdirSync(testDir)
     .filter(file => file.endsWith('.test.js'))
     .sort();
   
-  if (testFiles.length === 0) {
-    console.log(colorText('没有找到测试文件!', colors.yellow));
-    process.exit(0);
-  }
+  console.log('🚀 开始运行tree-cache模块测试');
+  console.log(`📁 发现 ${testFiles.length} 个测试文件\n`);
   
-  console.log(colorText(`发现 ${testFiles.length} 个测试文件`, colors.green));
-  
-  // 创建测试运行器
-  const runner = new SimpleTestRunner();
-  
-  // 运行每个测试文件
   testFiles.forEach((file, index) => {
-    const filePath = path.join(testDir, file);
-    console.log(colorText(`[${index + 1}/${testFiles.length}] 运行: ${file}`, colors.blue));
+    console.log(`📄 运行测试文件: ${file} (${index + 1}/${testFiles.length})`);
     
     try {
-      const testModule = require(filePath);
+      const testModule = require(path.join(testDir, file));
+      
+      // 如果测试文件导出了测试函数，执行它
       if (typeof testModule === 'function') {
         testModule(runner);
-      } else {
-        console.log(colorText(`  警告: ${file} 没有导出测试函数`, colors.yellow));
       }
     } catch (error) {
-      console.error(colorText(`  错误: ${file} 执行失败: ${error.message}`, colors.red));
-      console.error(colorText(`  ${error.stack}`, colors.dim));
+      console.log(`❌ 加载测试文件 ${file} 失败: ${error.message}`);
     }
   });
   
-  // 打印测试结果
-  printHeader('测试结果');
+  runner.printSummary();
   
-  const passRate = runner.passedTests / runner.totalTests * 100 || 0;
-  const passRateText = passRate.toFixed(2) + '%';
-  
-  console.log(`总测试数: ${colorText(runner.totalTests, colors.bright)}`);
-  console.log(`通过: ${colorText(runner.passedTests, colors.green)} ✓`);
-  console.log(`失败: ${colorText(runner.failedTests, colors.red)} ✗`);
-  console.log(`通过率: ${passRate === 100 ? colorText(passRateText, colors.green) : colorText(passRateText, colors.yellow)}`);
-  
-  // 打印结论
-  if (runner.failedTests === 0 && runner.totalTests > 0) {
-    console.log('\n' + colorText('🎉 所有测试通过!', colors.green + colors.bright));
+  // 退出码
+  if (runner.failedTests > 0) {
+    process.exit(1);
+  } else {
     process.exit(0);
-  } else if (runner.totalTests === 0) {
-    console.log('\n' + colorText('⚠️ 没有执行任何测试!', colors.yellow + colors.bright));
-    process.exit(1);
-  } else {
-    console.log('\n' + colorText('❌ 有测试失败!', colors.red + colors.bright));
-    process.exit(1);
   }
 }
 
-// 运行单个测试文件
-function runSingleTest(testFile) {
-  const testPath = path.join(__dirname, 'test', testFile);
-  
-  if (!fs.existsSync(testPath)) {
-    console.error(colorText(`错误: 测试文件 ${testFile} 不存在!`, colors.red));
-    process.exit(1);
-  }
-  
-  printHeader(`运行测试: ${testFile}`);
-  
-  const runner = new SimpleTestRunner();
-  
-  try {
-    const testModule = require(testPath);
-    if (typeof testModule === 'function') {
-      testModule(runner);
-    } else {
-      console.log(colorText(`警告: ${testFile} 没有导出测试函数`, colors.yellow));
-    }
-  } catch (error) {
-    console.error(colorText(`错误: ${testFile} 执行失败: ${error.message}`, colors.red));
-    console.error(colorText(`${error.stack}`, colors.dim));
-    process.exit(1);
-  }
-  
-  // 打印测试结果
-  printHeader('测试结果');
-  
-  const passRate = runner.passedTests / runner.totalTests * 100 || 0;
-  const passRateText = passRate.toFixed(2) + '%';
-  
-  console.log(`总测试数: ${colorText(runner.totalTests, colors.bright)}`);
-  console.log(`通过: ${colorText(runner.passedTests, colors.green)} ✓`);
-  console.log(`失败: ${colorText(runner.failedTests, colors.red)} ✗`);
-  console.log(`通过率: ${passRate === 100 ? colorText(passRateText, colors.green) : colorText(passRateText, colors.yellow)}`);
-  
-  if (runner.failedTests === 0 && runner.totalTests > 0) {
-    console.log('\n' + colorText('🎉 所有测试通过!', colors.green + colors.bright));
-    process.exit(0);
-  } else {
-    console.log('\n' + colorText('❌ 有测试失败!', colors.red + colors.bright));
-    process.exit(1);
-  }
-}
-
-// 显示帮助信息
-function showHelp() {
-  console.log(`
-${colorText('树缓存模块测试运行器', colors.bright)}
-
-用法:
-  ${colorText('node run-tests.js', colors.green)}             运行所有测试
-  ${colorText('node run-tests.js <文件名>', colors.green)}    运行指定测试文件
-  ${colorText('node run-tests.js --help', colors.green)}      显示帮助信息
-
-示例:
-  ${colorText('node run-tests.js', colors.dim)}                         运行所有测试
-  ${colorText('node run-tests.js tree-node.test.js', colors.dim)}       只运行TreeNode测试
-  `);
-}
-
-// 主函数
-function main() {
-  const args = process.argv.slice(2);
-  
-  if (args.includes('--help') || args.includes('-h')) {
-    showHelp();
-    return;
-  }
-  
-  if (args.length === 0) {
-    runAllTests();
-  } else {
-    runSingleTest(args[0]);
-  }
-}
-
-// 执行主函数
+// 如果直接运行此文件，执行所有测试
 if (require.main === module) {
-  main();
+  console.log('===========');
+  console.log('| 树缓存模块测试 |');
+  console.log('===========');
+  console.log();
+  
+  runAllTests();
 }
 
-module.exports = {
-  runAllTests,
-  runSingleTest
-};
+module.exports = { SimpleTestRunner, runAllTests };
