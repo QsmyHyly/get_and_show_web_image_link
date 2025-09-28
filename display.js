@@ -1,37 +1,5 @@
-// 树形缓存容器实现
-class TreeNode {
-  constructor(name) {
-    this.name = name;
-    this.children = {};
-  }
-
-  addChild(node) {
-    this.children[node.name] = node;
-  }
-
-  getChild(name) {
-    return this.children[name];
-  }
-}
-
-class CacheLeafNode extends TreeNode {
-  constructor(name) {
-    super(name);
-    this.cache = null;
-  }
-
-  setCache(data) {
-    this.cache = data;
-  }
-
-  getCache() {
-    return this.cache;
-  }
-
-  clearCache() {
-    this.cache = null;
-  }
-}
+// 引入树缓存模块
+// 树形缓存容器实现在 tree-cache.js 文件中
 
 // 日志函数
 function log(message, data = null) {
@@ -85,10 +53,9 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentSizeMode = 'large'; // 'large', 'small', 'all'
   const MIN_IMAGE_SIZE = 10000; // 100x100像素以下的视为小图片
   
-  // 初始化缓存树
-  const cacheTree = new TreeNode('root');
-  const sortCache = new CacheLeafNode('sortCache');
-  cacheTree.addChild(sortCache);
+  // 初始化缓存树管理器
+  const cacheTreeManager = new CacheTreeManager();
+  const sortCache = cacheTreeManager.addCacheNode('sortCache');
 
   // 从存储中获取图片链接
   log('开始从存储中获取图片链接');
