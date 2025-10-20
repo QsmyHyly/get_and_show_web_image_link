@@ -1,57 +1,60 @@
-// 日志函数
-function log(message, data = null) {
-  const timestamp = new Date().toLocaleTimeString();
-  if (data) {
-    console.log(`[网页图片链接获取器][Popup][${timestamp}] ${message}`, data);
-  } else {
-    console.log(`[网页图片链接获取器][Popup][${timestamp}] ${message}`);
-  }
-}
-
+/**
+ * 弹出窗口脚本
+ * 处理用户交互，发送消息到内容脚本获取图片链接
+ */
 document.addEventListener('DOMContentLoaded', function() {
-  log('弹出窗口初始化');
-  const getImagesButton = document.getElementById('getImages');
+  const getImagesBtn = document.getElementById('getImages');
   const statusDiv = document.getElementById('status');
 
-  getImagesButton.addEventListener('click', async () => {
-    log('点击获取图片按钮');
+  // 获取图片按钮点击事件
+  getImagesBtn.addEventListener('click', function() {
     statusDiv.textContent = '正在获取图片链接...';
-    
-    try {
-      // 获取当前活动标签页
-      const [tab] = await chrome.tabs.query({ 
-        active: true, 
-        currentWindow: true 
-      });
-      log('当前活动标签页', tab);
+    getImagesBtn.disabled = true;
 
-      // 发送消息到content.js
-      chrome.tabs.sendMessage(tab.id, { action: "getImages" }, (response) => {
+    // 获取当前活动标签页
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      const activeTab = tabs[0];
+      
+      // 先注入内容脚本，然后发送消息
+      chrome.scripting.executeScript({
+        target: { tabId: activeTab.id },
+        files: ['content.js']
+      }, function() {
         if (chrome.runtime.lastError) {
-          const errorMsg = chrome.runtime.lastError.message;
-          log('发送消息错误', errorMsg);
-          statusDiv.textContent = '错误: ' + errorMsg;
+          statusDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
+          getImagesBtn.disabled = false;
           return;
         }
+        
+        // 向内容脚本发送消息，请求获取图片链接
+        chrome.tabs.sendMessage(activeTab.id, { action: 'getImages' }, function(response) {
+          if (chrome.runtime.lastError) {
+            statusDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
+            getImagesBtn.disabled = false;
+            return;
+          }
 
-        if (response && response.success) {
-          log('收到成功响应', response);
-          statusDiv.textContent = '正在处理图片...';
-          
-          // 等待1秒让background.js处理完图片
-          setTimeout(() => {
-            // 打开显示页面
-            chrome.tabs.create({ url: 'display.html' });
-            statusDiv.textContent = '已完成';
-          }, 1000);
-        } else {
-          log('未收到有效响应');
-          statusDiv.textContent = '获取图片失败，请重试';
-        }
+          if (response && response.success) {
+            statusDiv.textContent = `成功获取 ${response.imageUrls.length} 个图片链接`;
+            
+            // 将图片URL存储到chrome.storage中
+            chrome.storage.local.set({ 
+              imageUrls: response.imageUrls,
+              pageTitle: activeTab.title,
+              pageUrl: activeTab.url
+            }, function() {
+              // 打开结果页面
+              chrome.tabs.create({ url: 'results.html' }, function(tab) {
+                // 关闭弹出窗口
+                window.close();
+              });
+            });
+          } else {
+            statusDiv.textContent = '获取图片链接失败';
+            getImagesBtn.disabled = false;
+          }
+        });
       });
-    } catch (error) {
-      log('发生错误', error);
-      statusDiv.textContent = '错误: ' + error.message;
-    }
+    });
   });
 });

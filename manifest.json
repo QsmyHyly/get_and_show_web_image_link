@@ -3,7 +3,7 @@
   "name": "网页图片链接获取器",
   "version": "1.0",
   "description": "获取网页上所有图片链接并在新页面中显示",
-  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
@@ -16,12 +16,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ],
   "icons": {
     "16": "images/icon16.png",
     "48": "images/icon48.png",

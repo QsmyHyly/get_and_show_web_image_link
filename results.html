@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>图片链接结果</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="results-container">
+    <div class="header">
+      <h1>网页图片链接获取结果</h1>
+      <div class="page-info">
+        <div>页面标题: <span id="pageTitle"></span></div>
+        <div>页面URL: <span id="pageUrl"></span></div>
+      </div>
+    </div>
+    <div class="image-count">共找到 <span id="imageCount">0</span> 个图片</div>
+    
+    <div class="controls">
+      <input type="text" id="searchBox" class="search-box" placeholder="搜索图片URL...">
+      <div class="filter-buttons">
+        <button id="gridViewBtn" class="filter-btn active">网格视图</button>
+        <button id="listViewBtn" class="filter-btn">列表视图</button>
+      </div>
+    </div>
+    <div class="action-buttons">
+      <button id="selectAllBtn" class="action-btn">全选</button>
+      <button id="deselectAllBtn" class="action-btn">取消全选</button>
+      <button id="downloadSelectedBtn" class="action-btn">下载选中</button>
+      <button id="copyAllBtn" class="action-btn">复制所有URL</button>
+    </div>
+    
+    <div id="loadingSpinner" class="loading-spinner">
+      <div class="spinner"></div>
+    </div>
+    
+    <div id="noImages" class="no-images" style="display: none;">
+      <p>未找到任何图片</p>
+    </div>
+    
+    <div id="imageGrid" class="image-grid"></div>
+  </div>
+  
+  <div id="toast" class="toast"></div>
+  
+  <script src="results.js"></script>
+</body>
+</html>
