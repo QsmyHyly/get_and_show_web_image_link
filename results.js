@@ -43,6 +43,108 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   /**
+   * 获取图片的详细信息（大小、格式等）
+   * @param {Array} images 需要获取信息的图片数组
+   */
+  function fetchImageDetails(images) {
+    images.forEach(image => {
+      // 从URL中提取图片格式
+      const url = image.url;
+      const formatMatch = url.match(/\.([^.]+)(?:[?#]|$)/i);
+      image.format = formatMatch ? formatMatch[1].toLowerCase() : 'unknown';
+      
+      // 标记图片信息加载状态
+      image.detailsLoaded = false;
+      
+      // 使用Image对象异步获取图片大小
+      const imgObj = new Image();
+      
+      // 设置超时处理
+      const timeout = setTimeout(() => {
+        image.width = 0;
+        image.height = 0;
+        image.size = '未知';
+        image.detailsLoaded = true;
+        
+        // 更新对应图片的DOM显示
+        updateImageDetailsInDOM(image.id, image);
+      }, 5000); // 5秒超时
+      
+      imgObj.onload = function() {
+        clearTimeout(timeout); // 清除超时
+        
+        // 添加图片尺寸信息
+        image.width = this.width;
+        image.height = this.height;
+        image.aspectRatio = this.width / this.height;
+        
+        // 估算图片大小（实际大小需要通过fetch获取，这里只做估算）
+        // 简单估算：假设平均每像素3字节（RGB）
+        const estimatedSizeInBytes = this.width * this.height * 3;
+        if (estimatedSizeInBytes < 1024) {
+          image.size = estimatedSizeInBytes + ' B';
+        } else if (estimatedSizeInBytes < 1024 * 1024) {
+          image.size = (estimatedSizeInBytes / 1024).toFixed(2) + ' KB';
+        } else {
+          image.size = (estimatedSizeInBytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+        
+        image.detailsLoaded = true;
+        
+        // 更新对应图片的DOM显示
+        updateImageDetailsInDOM(image.id, image);
+      };
+      
+      imgObj.onerror = function() {
+        clearTimeout(timeout); // 清除超时
+        image.width = 0;
+        image.height = 0;
+        image.size = '加载失败';
+        image.detailsLoaded = true;
+        
+        // 更新对应图片的DOM显示
+        updateImageDetailsInDOM(image.id, image);
+      };
+      
+      // 启用跨域支持
+      imgObj.crossOrigin = 'anonymous';
+      imgObj.src = url;
+    });
+  }
+  
+  /**
+   * 更新DOM中图片的详细信息显示
+   * @param {string} imageId 图片ID
+   * @param {Object} image 包含详细信息的图片对象
+   */
+  function updateImageDetailsInDOM(imageId, image) {
+    const imageItem = document.querySelector(`.image-item[data-id="${imageId}"]`);
+    if (!imageItem) return;
+    
+    // 检查是否已有详细信息容器
+    let detailsContainer = imageItem.querySelector('.image-details');
+    
+    if (!detailsContainer) {
+      // 创建详细信息容器
+      detailsContainer = document.createElement('div');
+      detailsContainer.className = 'image-details';
+      
+      // 找到图片信息容器并插入详细信息
+      const imageInfo = imageItem.querySelector('.image-info');
+      if (imageInfo) {
+        imageInfo.appendChild(detailsContainer);
+      }
+    }
+    
+    // 更新详细信息内容
+    if (image.detailsLoaded) {
+      detailsContainer.textContent = `${image.width}×${image.height} · ${image.format.toUpperCase()} · ${image.size}`;
+    } else {
+      detailsContainer.textContent = '加载中...';
+    }
+  }
+  
+  /**
    * 从存储中加载图片数据
    */
   function loadImagesFromStorage() {
@@ -74,6 +176,9 @@ document.addEventListener('DOMContentLoaded', function() {
           // 更新计数并重新渲染
           imageCount.textContent = allImages.length;
           renderImages();
+          
+          // 异步获取新图片的详细信息
+          fetchImageDetails(newImages);
         }
         
         // 如果正在收集更多图片，启动定期更新
@@ -192,6 +297,21 @@ document.addEventListener('DOMContentLoaded', function() {
     copyAllBtn.addEventListener('click', function() {
       copyAllUrls();
     });
+    
+    // 当新的图片被加载时，自动更新页面
+    chrome.storage.onChanged.addListener(function(changes, namespace) {
+      if (namespace === 'local' && changes.imageUrls) {
+        loadImagesFromStorage();
+      }
+    });
+    
+    // 监听DOM变化，当新的图片项被添加到网格中时，确保它们有详细信息
+    const observer = new MutationObserver(function(mutations) {
+      // 检查是否有图片需要获取详情
+      fetchDetailsForExistingImages();
+    });
+    
+    observer.observe(imageGrid, { childList: true, subtree: true });
   }
   
   /**
@@ -199,6 +319,19 @@ document.addEventListener('DOMContentLoaded', function() {
    */
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+  
+  /**
+   * 为已加载但缺少详细信息的图片获取详情
+   */
+  function fetchDetailsForExistingImages() {
+    // 查找所有未获取过详情的图片
+    const imagesWithoutDetails = allImages.filter(img => !('detailsLoaded' in img));
+    
+    if (imagesWithoutDetails.length > 0) {
+      // 异步获取这些图片的详细信息
+      fetchImageDetails(imagesWithoutDetails);
+    }
   }
   
   /**
@@ -219,6 +352,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 更新图片计数
     imageCount.textContent = filteredImages.length;
+    
+    // 为现有图片获取详情
+    fetchDetailsForExistingImages();
   }
   
   /**
