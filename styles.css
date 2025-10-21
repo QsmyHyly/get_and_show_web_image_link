@@ -359,6 +359,28 @@ button:disabled {
   animation: spin 1s ease-in-out infinite;
 }
 
+/* 收集状态指示器样式 */
+.collecting-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 14px;
+  font-weight: 500;
+  gap: 10px;
+}
+
+.collecting-status .spinner {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', function() {
   let allImages = [];
   let filteredImages = [];
   let currentView = 'grid'; // 'grid' 或 'list'
+  let isCollectingMore = false;
+  let updateInterval = null;
+  let lastUpdated = 0;
   
   // 初始化
   init();
@@ -33,35 +36,124 @@ document.addEventListener('DOMContentLoaded', function() {
    */
   function init() {
     // 从存储中获取图片数据
-    chrome.storage.local.get(['imageUrls', 'pageTitle', 'pageUrl'], function(data) {
+    loadImagesFromStorage();
+    
+    // 添加事件监听器
+    setupEventListeners();
+  }
+  
+  /**
+   * 从存储中加载图片数据
+   */
+  function loadImagesFromStorage() {
+    chrome.storage.local.get(['imageUrls', 'pageTitle', 'pageUrl', 'isCollectingMore', 'lastUpdated'], function(data) {
+      // 更新页面信息
+      pageTitle.textContent = data.pageTitle || '未知页面';
+      pageUrl.textContent = data.pageUrl || '';
+      
+      // 检查是否有图片数据
       if (data.imageUrls && data.imageUrls.length > 0) {
-        allImages = data.imageUrls.map(url => ({
-          url: url,
-          selected: false,
-          id: generateId()
-        }));
+        // 更新最后更新时间和收集状态
+        isCollectingMore = data.isCollectingMore || false;
+        lastUpdated = data.lastUpdated || Date.now();
         
-        filteredImages = [...allImages];
+        // 合并新的图片到现有列表，避免重复
+        const newUrls = data.imageUrls.filter(url => !allImages.some(img => img.url === url));
         
-        // 更新页面信息
-        pageTitle.textContent = data.pageTitle || '未知页面';
-        pageUrl.textContent = data.pageUrl || '';
-        imageCount.textContent = allImages.length;
+        // 如果有新图片，添加到列表
+        if (newUrls.length > 0) {
+          const newImages = newUrls.map(url => ({
+            url: url,
+            selected: false,
+            id: generateId()
+          }));
+          
+          allImages = [...allImages, ...newImages];
+          filteredImages = [...allImages];
+          
+          // 更新计数并重新渲染
+          imageCount.textContent = allImages.length;
+          renderImages();
+        }
         
-        // 渲染图片
-        renderImages();
+        // 如果正在收集更多图片，启动定期更新
+        if (isCollectingMore) {
+          showCollectingMoreStatus();
+          startUpdateInterval();
+        } else {
+          hideCollectingMoreStatus();
+          stopUpdateInterval();
+        }
         
         // 隐藏加载动画
         loadingSpinner.style.display = 'none';
+        noImages.style.display = 'none';
       } else {
         // 没有找到图片
         loadingSpinner.style.display = 'none';
         noImages.style.display = 'block';
+        
+        // 停止更新间隔
+        stopUpdateInterval();
       }
     });
+  }
+  
+  /**
+   * 显示正在收集更多图片的状态
+   */
+  function showCollectingMoreStatus() {
+    // 检查是否已有状态指示器
+    let statusIndicator = document.getElementById('collectingMoreStatus');
     
-    // 添加事件监听器
-    setupEventListeners();
+    if (!statusIndicator) {
+      // 创建新的状态指示器
+      statusIndicator = document.createElement('div');
+      statusIndicator.id = 'collectingMoreStatus';
+      statusIndicator.className = 'collecting-status';
+      statusIndicator.innerHTML = '<div class="spinner"></div><span>正在搜索更多图片...</span>';
+      
+      // 添加到页面
+      const header = document.querySelector('.header');
+      header.appendChild(statusIndicator);
+    }
+    
+    statusIndicator.style.display = 'flex';
+  }
+  
+  /**
+   * 隐藏正在收集更多图片的状态
+   */
+  function hideCollectingMoreStatus() {
+    const statusIndicator = document.getElementById('collectingMoreStatus');
+    if (statusIndicator) {
+      statusIndicator.style.display = 'none';
+    }
+  }
+  
+  /**
+   * 启动定期更新图片列表的间隔
+   */
+  function startUpdateInterval() {
+    // 如果已经有间隔在运行，先清除
+    if (updateInterval) {
+      clearInterval(updateInterval);
+    }
+    
+    // 每2秒检查一次更新
+    updateInterval = setInterval(() => {
+      loadImagesFromStorage();
+    }, 2000);
+  }
+  
+  /**
+   * 停止定期更新图片列表的间隔
+   */
+  function stopUpdateInterval() {
+    if (updateInterval) {
+      clearInterval(updateInterval);
+      updateInterval = null;
+    }
   }
   
   /**

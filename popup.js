@@ -35,18 +35,33 @@ document.addEventListener('DOMContentLoaded', function() {
           }
 
           if (response && response.success) {
-            statusDiv.textContent = `成功获取 ${response.imageUrls.length} 个图片链接`;
+            statusDiv.textContent = `已获取 ${response.imageUrls.length} 个图片链接，正在搜索更多...`;
             
-            // 将图片URL存储到chrome.storage中
+            // 将初始图片URL存储到chrome.storage中
             chrome.storage.local.set({ 
               imageUrls: response.imageUrls,
               pageTitle: activeTab.title,
-              pageUrl: activeTab.url
+              pageUrl: activeTab.url,
+              isCollectingMore: true, // 标记正在收集更多图片
+              lastUpdated: Date.now()
             }, function() {
               // 打开结果页面
               chrome.tabs.create({ url: 'results.html' }, function(tab) {
-                // 关闭弹出窗口
-                window.close();
+                // 设置定时器，在popup关闭前可能还能收集到一些额外图片
+                setTimeout(function() {
+                  chrome.storage.local.get('imageUrls', function(result) {
+                    // 检查是否有新图片被添加
+                    if (result.imageUrls && result.imageUrls.length > response.imageUrls.length) {
+                      // 如果有新图片，更新存储
+                      chrome.storage.local.set({ 
+                        imageUrls: result.imageUrls,
+                        lastUpdated: Date.now()
+                      });
+                    }
+                    // 关闭弹出窗口
+                    window.close();
+                  });
+                }, 1000); // 等待1秒后关闭，给异步收集一些时间
               });
             });
           } else {
