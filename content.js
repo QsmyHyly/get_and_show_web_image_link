@@ -148,8 +148,8 @@ function extractImagesFromFileContent(content, imageUrls) {
       /https?:\/\/[^\s"'<>,]+\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)(\?[^\s"'<>,]*)?/gi,
       // 相对路径URL
       /\/[^\s"'<>,]+\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)(\?[^\s"'<>,]*)?/gi,
-      // URL函数中的图片引用
-      /url\(['"]?([^'"]+\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)[^'"]*)['"]?\)/gi
+      // URL函数中的图片引用（修复：确保只提取URL部分，不包含CSS代码）
+      /url\(['"]?([^'"\)]+\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)[^'"\)]*)['"]?\)/gi
     ];
   
   urlPatterns.forEach(pattern => {
@@ -235,8 +235,8 @@ async function getAllImageUrlsAsync() {
       const bgImage = computedStyle.backgroundImage;
       
       if (bgImage && bgImage !== 'none') {
-        // 提取URL从background-image属性中
-        const matches = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/g);
+        // 提取URL从background-image属性中（修复：确保只提取URL部分，不包含CSS代码）
+        const matches = bgImage.match(/url\(['"]?([^'"\)]+)['"]?\)/g);
         if (matches) {
           matches.forEach(match => {
             const url = match.slice(4, -1).replace(/['""]/g, '');
@@ -389,8 +389,8 @@ function getAllImageUrls() {
     const bgImage = computedStyle.backgroundImage;
     
     if (bgImage && bgImage !== 'none') {
-      // 提取URL从background-image属性中
-      const matches = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/g);
+      // 提取URL从background-image属性中（修复：确保只提取URL部分，不包含CSS代码）
+      const matches = bgImage.match(/url\(['"]?([^'"\)]+)['"]?\)/g);
       if (matches) {
         matches.forEach(match => {
           const url = match.slice(4, -1).replace(/['""]/g, '');
