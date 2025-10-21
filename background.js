@@ -57,6 +57,12 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
 
 // 监听来自内容脚本或弹出窗口的消息
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  // 检查消息是否有效
+  if (!request) {
+    console.log('收到无效消息');
+    return;
+  }
+  
   // 处理不同类型的消息
   if (request.action === 'storeImages') {
     // 存储图片URL
@@ -81,6 +87,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     });
     return true; // 表示异步响应
   }
+  
+  // 记录未知消息类型
+  console.log('收到未知消息类型:', request);
 });
 
 // 监听标签页更新事件

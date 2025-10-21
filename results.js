@@ -471,6 +471,25 @@ document.addEventListener('DOMContentLoaded', function() {
       item.appendChild(imageInfo);
     }
     
+    // 添加点击image-item自动选中复选框的功能
+    item.addEventListener('click', function(e) {
+      // 如果点击的是复选框或按钮，不执行此操作，避免冲突
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.classList.contains('toggle-url')) {
+        return;
+      }
+      
+      // 找到当前图片项中的复选框
+      const checkbox = this.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        // 切换复选框状态
+        checkbox.checked = !checkbox.checked;
+        
+        // 触发change事件，确保数据状态同步
+        const changeEvent = new Event('change', { bubbles: true });
+        checkbox.dispatchEvent(changeEvent);
+      }
+    });
+    
     return item;
   }
   

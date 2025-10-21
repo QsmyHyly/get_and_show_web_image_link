@@ -288,6 +288,10 @@ button:disabled {
   justify-content: flex-start;
   /* 强制元素在一行，不允许任何换行 */
   overflow-x: auto;
+  /* 重置最小高度，使列表项根据内容自适应高度 */
+  min-height: auto;
+  /* 设置固定高度以保持一致性 */
+  height: 64px;
 }
 
 .list-view .image-item:hover {

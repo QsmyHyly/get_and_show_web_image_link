@@ -4,6 +4,22 @@
  */
 
 /**
+ * 规范化URL，确保添加协议前缀
+ * @param {string} url - 原始URL
+ * @return {string} 规范化后的URL
+ */
+function normalizeUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  
+  // 处理协议相对URL（以//开头）
+  if (url.startsWith('//')) {
+    return 'https:' + url;
+  }
+  
+  return url;
+}
+
+/**
  * 清理URL中的特殊后缀（如@360w_360h_!web-avatar-nav.avif）
  * @param {string} url - 原始URL
  * @return {string} 清理后的URL
@@ -64,14 +80,16 @@ function getImagesFromIframe(iframe, imageUrls) {
     const iframeImages = iframeDoc.querySelectorAll('img');
     iframeImages.forEach(img => {
       if (img.src && isImageUrl(img.src)) {
-        const cleanedUrl = cleanImageUrl(img.src);
+        const normalizedUrl = normalizeUrl(img.src);
+        const cleanedUrl = cleanImageUrl(normalizedUrl);
         if (cleanedUrl) {
           imageUrls.add(cleanedUrl);
         }
       }
       
       if (img.dataset.src && isImageUrl(img.dataset.src)) {
-        const cleanedUrl = cleanImageUrl(img.dataset.src);
+        const normalizedUrl = normalizeUrl(img.dataset.src);
+        const cleanedUrl = cleanImageUrl(normalizedUrl);
         if (cleanedUrl) {
           imageUrls.add(cleanedUrl);
         }
@@ -91,7 +109,8 @@ function getImagesFromIframe(iframe, imageUrls) {
             matches.forEach(match => {
               const url = match.slice(4, -1).replace(/['""]/g, '');
               if (url && isImageUrl(url)) {
-                const cleanedUrl = cleanImageUrl(url);
+                const normalizedUrl = normalizeUrl(url);
+                const cleanedUrl = cleanImageUrl(normalizedUrl);
                 if (cleanedUrl) {
                   imageUrls.add(cleanedUrl);
                 }
@@ -145,8 +164,8 @@ function extractImagesFromFileContent(content, imageUrls) {
         const baseUrl = window.location.origin;
         url = baseUrl + url;
       } else if (url.startsWith('//')) {
-        // 处理协议相对URL
-        url = window.location.protocol + url;
+        // 处理协议相对URL，统一使用https
+        url = normalizeUrl(url);
       } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
         // 处理相对路径（如../images/image.jpg）
         const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
@@ -177,7 +196,8 @@ async function getAllImageUrlsAsync() {
   imgElements.forEach(img => {
     // 检查src属性
     if (img.src && isImageUrl(img.src)) {
-      const cleanedUrl = cleanImageUrl(img.src);
+      const normalizedUrl = normalizeUrl(img.src);
+      const cleanedUrl = cleanImageUrl(normalizedUrl);
       if (cleanedUrl) {
         imageUrls.add(cleanedUrl);
       }
@@ -187,19 +207,21 @@ async function getAllImageUrlsAsync() {
     if (img.srcset) {
       const srcsetEntries = img.srcset.split(',');
       srcsetEntries.forEach(entry => {
-        const url = entry.trim().split(' ')[0];
-        if (url && isImageUrl(url)) {
-          const cleanedUrl = cleanImageUrl(url);
-          if (cleanedUrl) {
-            imageUrls.add(cleanedUrl);
+          const url = entry.trim().split(' ')[0];
+          if (url && isImageUrl(url)) {
+            const normalizedUrl = normalizeUrl(url);
+            const cleanedUrl = cleanImageUrl(normalizedUrl);
+            if (cleanedUrl) {
+              imageUrls.add(cleanedUrl);
+            }
           }
-        }
-      });
+        });
     }
     
     // 检查data-src属性（懒加载图片）
     if (img.dataset.src && isImageUrl(img.dataset.src)) {
-      const cleanedUrl = cleanImageUrl(img.dataset.src);
+      const normalizedUrl = normalizeUrl(img.dataset.src);
+      const cleanedUrl = cleanImageUrl(normalizedUrl);
       if (cleanedUrl) {
         imageUrls.add(cleanedUrl);
       }
@@ -207,39 +229,41 @@ async function getAllImageUrlsAsync() {
   });
   
   // 2. 获取所有具有背景图片的元素
-  const elementsWithBgImage = document.querySelectorAll('*');
-  elementsWithBgImage.forEach(element => {
-    const computedStyle = window.getComputedStyle(element);
-    const bgImage = computedStyle.backgroundImage;
-    
-    if (bgImage && bgImage !== 'none') {
-      // 提取URL从background-image属性中
-      const matches = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/g);
-      if (matches) {
-        matches.forEach(match => {
-          const url = match.slice(4, -1).replace(/['""]/g, '');
-          if (url && isImageUrl(url)) {
-            const cleanedUrl = cleanImageUrl(url);
-            if (cleanedUrl) {
-              imageUrls.add(cleanedUrl);
+    const elementsWithBgImage = document.querySelectorAll('*');
+    elementsWithBgImage.forEach(element => {
+      const computedStyle = window.getComputedStyle(element);
+      const bgImage = computedStyle.backgroundImage;
+      
+      if (bgImage && bgImage !== 'none') {
+        // 提取URL从background-image属性中
+        const matches = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/g);
+        if (matches) {
+          matches.forEach(match => {
+            const url = match.slice(4, -1).replace(/['""]/g, '');
+            if (url && isImageUrl(url)) {
+              const normalizedUrl = normalizeUrl(url);
+              const cleanedUrl = cleanImageUrl(normalizedUrl);
+              if (cleanedUrl) {
+                imageUrls.add(cleanedUrl);
+              }
             }
-          }
-        });
-      }
-    }
-  });
-  
-  // 3. 获取所有link标签中的图片（如预加载的图片）
-  const linkElements = document.querySelectorAll('link');
-  linkElements.forEach(link => {
-    if (link.rel === 'preload' && link.as === 'image' && link.href) {
-      if (isImageUrl(link.href)) {
-        const cleanedUrl = cleanImageUrl(link.href);
-        if (cleanedUrl) {
-          imageUrls.add(cleanedUrl);
+          });
         }
       }
-    }
+    });
+  
+  // 3. 获取所有link标签中的图片（如预加载的图片）
+    const linkElements = document.querySelectorAll('link');
+    linkElements.forEach(link => {
+      if (link.rel === 'preload' && link.as === 'image' && link.href) {
+        if (isImageUrl(link.href)) {
+          const normalizedUrl = normalizeUrl(link.href);
+          const cleanedUrl = cleanImageUrl(normalizedUrl);
+          if (cleanedUrl) {
+            imageUrls.add(cleanedUrl);
+          }
+        }
+      }
     
     // 处理CSS文件链接，尝试获取其内容
     if (link.rel === 'stylesheet' && link.href) {
@@ -251,7 +275,9 @@ async function getAllImageUrlsAsync() {
           throw new Error('Failed to fetch CSS');
         })
         .then(cssContent => {
-          extractImagesFromFileContent(cssContent, imageUrls);
+          // 先规范化URL再提取
+          const normalizedCssContent = cssContent;
+          extractImagesFromFileContent(normalizedCssContent, imageUrls);
         })
         .catch(error => {
           console.log('无法获取CSS文件内容:', error.message);
@@ -261,15 +287,16 @@ async function getAllImageUrlsAsync() {
   });
   
   // 4. 获取所有video元素的poster属性
-  const videoElements = document.querySelectorAll('video');
-  videoElements.forEach(video => {
-    if (video.poster && isImageUrl(video.poster)) {
-      const cleanedUrl = cleanImageUrl(video.poster);
-      if (cleanedUrl) {
-        imageUrls.add(cleanedUrl);
+    const videoElements = document.querySelectorAll('video');
+    videoElements.forEach(video => {
+      if (video.poster && isImageUrl(video.poster)) {
+        const normalizedUrl = normalizeUrl(video.poster);
+        const cleanedUrl = cleanImageUrl(normalizedUrl);
+        if (cleanedUrl) {
+          imageUrls.add(cleanedUrl);
+        }
       }
-    }
-  });
+    });
   
   // 5. 检查所有脚本和样式表中的图片引用
   const scriptsAndStyles = document.querySelectorAll('script, style');
@@ -287,7 +314,9 @@ async function getAllImageUrlsAsync() {
           throw new Error('Failed to fetch script');
         })
         .then(scriptContent => {
-          extractImagesFromFileContent(scriptContent, imageUrls);
+          // 先规范化URL再提取
+          const normalizedScriptContent = scriptContent;
+          extractImagesFromFileContent(normalizedScriptContent, imageUrls);
         })
         .catch(error => {
           console.log('无法获取JS文件内容:', error.message);
@@ -321,7 +350,8 @@ function getAllImageUrls() {
   imgElements.forEach(img => {
     // 检查src属性
     if (img.src && isImageUrl(img.src)) {
-      const cleanedUrl = cleanImageUrl(img.src);
+      const normalizedUrl = normalizeUrl(img.src);
+      const cleanedUrl = cleanImageUrl(normalizedUrl);
       if (cleanedUrl) {
         imageUrls.add(cleanedUrl);
       }
@@ -333,7 +363,8 @@ function getAllImageUrls() {
       srcsetEntries.forEach(entry => {
         const url = entry.trim().split(' ')[0];
         if (url && isImageUrl(url)) {
-          const cleanedUrl = cleanImageUrl(url);
+          const normalizedUrl = normalizeUrl(url);
+          const cleanedUrl = cleanImageUrl(normalizedUrl);
           if (cleanedUrl) {
             imageUrls.add(cleanedUrl);
           }
@@ -343,7 +374,8 @@ function getAllImageUrls() {
     
     // 检查data-src属性（懒加载图片）
     if (img.dataset.src && isImageUrl(img.dataset.src)) {
-      const cleanedUrl = cleanImageUrl(img.dataset.src);
+      const normalizedUrl = normalizeUrl(img.dataset.src);
+      const cleanedUrl = cleanImageUrl(normalizedUrl);
       if (cleanedUrl) {
         imageUrls.add(cleanedUrl);
       }
@@ -363,7 +395,8 @@ function getAllImageUrls() {
         matches.forEach(match => {
           const url = match.slice(4, -1).replace(/['""]/g, '');
           if (url && isImageUrl(url)) {
-            const cleanedUrl = cleanImageUrl(url);
+            const normalizedUrl = normalizeUrl(url);
+            const cleanedUrl = cleanImageUrl(normalizedUrl);
             if (cleanedUrl) {
               imageUrls.add(cleanedUrl);
             }
@@ -378,7 +411,8 @@ function getAllImageUrls() {
   linkElements.forEach(link => {
     if (link.rel === 'preload' && link.as === 'image' && link.href) {
       if (isImageUrl(link.href)) {
-        const cleanedUrl = cleanImageUrl(link.href);
+        const normalizedUrl = normalizeUrl(link.href);
+        const cleanedUrl = cleanImageUrl(normalizedUrl);
         if (cleanedUrl) {
           imageUrls.add(cleanedUrl);
         }
@@ -390,7 +424,8 @@ function getAllImageUrls() {
   const videoElements = document.querySelectorAll('video');
   videoElements.forEach(video => {
     if (video.poster && isImageUrl(video.poster)) {
-      const cleanedUrl = cleanImageUrl(video.poster);
+      const normalizedUrl = normalizeUrl(video.poster);
+      const cleanedUrl = cleanImageUrl(normalizedUrl);
       if (cleanedUrl) {
         imageUrls.add(cleanedUrl);
       }
