@@ -1,259 +1,326 @@
 /**
- * 图片处理器 - 负责图片的排序、分类等计算逻辑
- * 使用Image类表示图片，使用CacheManager管理缓存
+ * 图片处理纯函数库
+ * 提供纯函数式的排序器、分类器和过滤器
  */
 
 // 导入必要的依赖
 import Image from './Image.js';
 
-class ImageProcessor {
-  /**
-   * 构造函数
-   */
-  constructor() {
-    // 可以在这里添加其他配置
+/**
+ * 将普通图片对象数组转换为Image实例数组
+ * @param {Array} imageObjects - 普通图片对象数组
+ * @returns {Array} Image实例数组
+ */
+function convertToImageInstances(imageObjects) {
+  if (!Array.isArray(imageObjects)) {
+    return [];
   }
-
-  /**
-   * 将普通图片对象数组转换为Image实例数组
-   * @param {Array} imageObjects - 普通图片对象数组
-   * @returns {Array} Image实例数组
-   */
-  convertToImageInstances(imageObjects) {
-    if (!Array.isArray(imageObjects)) {
-      return [];
+  
+  return imageObjects.map(imgObj => {
+    if (imgObj instanceof Image) {
+      return imgObj;
     }
-    
-    return imageObjects.map(imgObj => {
-      if (imgObj instanceof Image) {
-        return imgObj;
-      }
-      // 如果是从JSON反序列化的对象，使用fromJSON方法
-      if (imgObj.url && imgObj.id) {
-        return Image.fromJSON(imgObj);
-      }
-      // 否则创建新的Image实例
-      return new Image(imgObj.url, imgObj.id);
-    });
-  }
-
-  /**
-   * 对图片数组进行排序
-   * @param {Array} images - 图片对象数组或Image实例数组
-   * @param {string} criteria - 排序标准: 'original', 'filename', 'fileType', 'domain'
-   * @param {boolean} ascending - 是否升序排列，默认为true
-   * @returns {Array} 排序后的图片数组
-   */
-  sortImages(images, criteria = 'original', ascending = true) {
-    if (!Array.isArray(images)) {
-      return [];
+    // 如果是从JSON反序列化的对象，使用fromJSON方法
+    if (imgObj.url && imgObj.id) {
+      return Image.fromJSON(imgObj);
     }
-    
-    if (criteria === 'original' || images.length <= 1) {
-      return [...images];
-    }
-    
-    // 确保所有对象都是Image实例
-    const imageInstances = this.convertToImageInstances(images);
-    
-    // 执行排序
-    const sortedImages = [...imageInstances].sort((a, b) => {
-      let aValue, bValue;
-      
-      switch (criteria) {
-        case 'filename':
-          aValue = a.getFilename().toLowerCase();
-          bValue = b.getFilename().toLowerCase();
-          break;
-        case 'fileType':
-          aValue = a.getFileType();
-          bValue = b.getFileType();
-          break;
-        case 'domain':
-          aValue = a.getDomain();
-          bValue = b.getDomain();
-          break;
-        default:
-          return 0; // 未知标准，保持原有顺序
-      }
-      
-      // 执行比较
-      if (aValue < bValue) return ascending ? -1 : 1;
-      if (aValue > bValue) return ascending ? 1 : -1;
-      return 0;
-    });
-    
-    return sortedImages;
-  }
-
-  /**
-   * 增量排序图片数组，将新图片插入到已排序的数组中
-   * @param {Array} alreadySortedImages - 已排序的图片数组
-   * @param {Array} newImages - 新添加的图片数组
-   * @param {string} criteria - 排序标准 (filename, fileType, domain)
-   * @param {boolean} ascending - 是否升序
-   * @returns {Array} 更新后的排序数组
-   */
-  incrementalSort(alreadySortedImages, newImages, criteria = 'original', ascending = true) {
-    // 验证输入参数
-    if (!Array.isArray(alreadySortedImages) || !Array.isArray(newImages)) {
-      return alreadySortedImages || [];
-    }
-    
-    // 确保所有对象都是Image实例
-    const sortedInstances = this.convertToImageInstances(alreadySortedImages);
-    const newInstances = this.convertToImageInstances(newImages);
-    
-    // 如果是原始顺序，直接合并数组
-    if (criteria === 'original') {
-      const result = [...sortedInstances, ...newInstances];
-      return result;
-    }
-    
-    // 合并两个数组并执行排序
-    const mergedImages = [...sortedInstances, ...newInstances];
-    const result = this.sortImages(mergedImages, criteria, ascending);
-    
-    return result;
-  }
-
-  /**
-   * 对图片数组进行分类
-   * @param {Array} images - 图片对象数组或Image实例数组
-   * @param {string} criteria - 分类标准: 'fileType', 'domain'
-   * @returns {Object} 分类结果，键为分类值，值为图片数组
-   */
-  categorizeImages(images, criteria) {
-    if (!Array.isArray(images)) {
-      return {};
-    }
-    
-    // 确保所有对象都是Image实例
-    const imageInstances = this.convertToImageInstances(images);
-    
-    // 执行分类
-    const result = {};
-    
-    // 对每个图片进行分类
-    imageInstances.forEach(img => {
-      let categoryKey;
-      
-      switch (criteria) {
-        case 'fileType':
-          categoryKey = img.getFileType();
-          break;
-        case 'domain':
-          categoryKey = img.getDomain();
-          break;
-        default:
-          categoryKey = 'unknown';
-      }
-      
-      // 构建结果对象
-      if (!result[categoryKey]) {
-        result[categoryKey] = [];
-      }
-      result[categoryKey].push(img);
-    });
-    
-    return result;
-  }
-
-  /**
-   * 获取特定分类下的图片
-   * @param {Array} allImages - 所有图片数组
-   * @param {string} categoryCriteria - 分类标准
-   * @param {string} categoryValue - 分类值
-   * @returns {Array} 该分类下的图片数组
-   */
-  getImagesByCategory(allImages, categoryCriteria, categoryValue) {
-    if (!Array.isArray(allImages)) {
-      return [];
-    }
-    
-    // 确保所有对象都是Image实例
-    const imageInstances = this.convertToImageInstances(allImages);
-    
-    // 获取完整分类结果
-    const allCategories = this.categorizeImages(imageInstances, categoryCriteria);
-    
-    // 提取特定分类的图片
-    const result = allCategories[categoryValue] || [];
-    
-    return result;
-  }
-
-
-
-  /**
-   * 懒加载图片尺寸信息
-   * @param {Object|Image} image - 图片对象或Image实例
-   * @returns {Promise<Object>} 包含图片尺寸的Promise
-   */
-  async loadImageDimensions(image) {
-    // 确保是Image实例
-    const imageInstance = image instanceof Image ? image : 
-                         (image.url ? new Image(image.url, image.id) : null);
-    
-    if (!imageInstance) {
-      throw new Error('无效的图片对象');
-    }
-    
-    // 创建图片对象加载尺寸
-    return new Promise((resolve, reject) => {
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        
-        img.onload = () => {
-          const size = { width: img.width, height: img.height };
-          // 更新Image实例的尺寸信息
-          imageInstance.updateDimensions(size.width, size.height);
-          resolve(size);
-        };
-        
-        img.onerror = () => {
-          // 加载失败时设置默认尺寸
-          const size = { width: 0, height: 0 };
-          // 标记图片加载失败
-          imageInstance.markAsFailed();
-          resolve(size);
-        };
-        
-        // 设置超时
-        setTimeout(() => {
-          const size = { width: 0, height: 0 };
-          // 标记图片加载失败
-          imageInstance.markAsFailed();
-          resolve(size);
-        }, 3000);
-        
-        img.src = imageInstance.url;
-      } catch (error) {
-        console.error('加载图片尺寸失败:', error);
-        reject(error);
-      }
-    });
-  }
+    // 否则创建新的Image实例
+    return new Image(imgObj.url, imgObj.id);
+  });
 }
 
-// 创建并导出单例实例
-const imageProcessor = new ImageProcessor();
+// ===== 纯函数式排序器（sortByXXX系列函数） =====
 
-// 导出模块
-export default imageProcessor;
-export { ImageProcessor, Image };
+/**
+ * 通用排序函数 - 接受自定义比较器
+ * @param {Array} images - 图片对象数组
+ * @param {Function} comparator - 比较函数 (a, b) => number
+ * @returns {Array} 排序后的新数组
+ */
+export function sortByComparator(images, comparator) {
+  if (!Array.isArray(images) || typeof comparator !== 'function') {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  // 创建数组副本并排序
+  return [...images].sort(comparator);
+}
+
+/**
+ * 按文件名排序
+ * @param {Array} images - 图片对象数组
+ * @param {boolean} ascending - 是否升序排列，默认为true
+ * @returns {Array} 排序后的图片数组
+ */
+export function sortByFilename(images, ascending = true) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return sortByComparator(imageInstances, (a, b) => {
+    const aValue = a.getFilename().toLowerCase();
+    const bValue = b.getFilename().toLowerCase();
+    
+    if (aValue < bValue) return ascending ? -1 : 1;
+    if (aValue > bValue) return ascending ? 1 : -1;
+    return 0;
+  });
+}
+
+/**
+ * 按文件类型排序
+ * @param {Array} images - 图片对象数组
+ * @param {boolean} ascending - 是否升序排列，默认为true
+ * @returns {Array} 排序后的图片数组
+ */
+export function sortByFileType(images, ascending = true) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return sortByComparator(imageInstances, (a, b) => {
+    const aValue = a.getFileType();
+    const bValue = b.getFileType();
+    
+    if (aValue < bValue) return ascending ? -1 : 1;
+    if (aValue > bValue) return ascending ? 1 : -1;
+    return 0;
+  });
+}
+
+/**
+ * 按域名排序
+ * @param {Array} images - 图片对象数组
+ * @param {boolean} ascending - 是否升序排列，默认为true
+ * @returns {Array} 排序后的图片数组
+ */
+export function sortByDomain(images, ascending = true) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return sortByComparator(imageInstances, (a, b) => {
+    const aValue = a.getDomain();
+    const bValue = b.getDomain();
+    
+    if (aValue < bValue) return ascending ? -1 : 1;
+    if (aValue > bValue) return ascending ? 1 : -1;
+    return 0;
+  });
+}
+
+/**
+ * 增量排序 - 将新图片合并到已排序数组
+ * @param {Array} alreadySortedImages - 已排序的图片数组
+ * @param {Array} newImages - 新添加的图片数组
+ * @param {Function} sortFunction - 排序函数
+ * @param {boolean} ascending - 是否升序
+ * @returns {Array} 更新后的排序数组
+ */
+export function incrementalSort(alreadySortedImages, newImages, sortFunction, ascending = true) {
+  if (!Array.isArray(alreadySortedImages) || !Array.isArray(newImages)) {
+    return alreadySortedImages || [];
+  }
+  
+  const sortedInstances = convertToImageInstances(alreadySortedImages);
+  const newInstances = convertToImageInstances(newImages);
+  const mergedImages = [...sortedInstances, ...newInstances];
+  
+  return sortFunction(mergedImages, ascending);
+}
+
+// ===== 函数式工具函数（续）=====
+
+/**
+ * 创建分类函数工厂
+ * @param {Function} categoryGetter - 从图片对象获取分类值的函数
+ * @returns {Function} 分类函数
+ */
+function createCategorizeFunction(categoryGetter) {
+  return (images) => {
+    return categorizeByFunction(images, categoryGetter);
+  };
+}
+
+// ===== 纯函数式分类器（categorizeByXXX系列函数） =====
+
+/**
+ * 通用分类函数
+ * @param {Array} images - 图片对象数组
+ * @param {Function} categoryFn - 分类函数 (image) => string
+ * @returns {Object} 分类结果，键为分类值，值为图片数组
+ */
+export function categorizeByFunction(images, categoryFn) {
+  if (!Array.isArray(images) || typeof categoryFn !== 'function') {
+    return {};
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return imageInstances.reduce((categories, img) => {
+    const categoryKey = categoryFn(img);
+    if (!categories[categoryKey]) {
+      categories[categoryKey] = [];
+    }
+    categories[categoryKey].push(img);
+    return categories;
+  }, {});
+}
+
+/**
+ * 按文件类型分类
+ * @param {Array} images - 图片对象数组
+ * @returns {Object} 按文件类型分类的结果
+ */
+export const categorizeByFileType = createCategorizeFunction(img => img.getFileType());
+
+/**
+ * 按域名分类
+ * @param {Array} images - 图片对象数组
+ * @returns {Object} 按域名分类的结果
+ */
+export const categorizeByDomain = createCategorizeFunction(img => img.getDomain());
+
+/**
+ * 获取特定分类下的图片
+ * @param {Object} categories - 分类结果对象
+ * @param {string} categoryValue - 分类值
+ * @returns {Array} 该分类下的图片数组
+ */
+export function getImagesByCategory(categories, categoryValue) {
+  if (!categories || typeof categories !== 'object') {
+    return [];
+  }
+  
+  return categories[categoryValue] || [];
+}
+
+// ===== 纯函数式过滤器（filterByXXX系列函数） =====
+
+/**
+ * 通用过滤函数
+ * @param {Array} images - 图片对象数组
+ * @param {Function} filterFn - 过滤函数 (image) => boolean
+ * @returns {Array} 过滤后的图片数组
+ */
+export function filterByFunction(images, filterFn) {
+  if (!Array.isArray(images) || typeof filterFn !== 'function') {
+    return [];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return imageInstances.filter(img => filterFn(img));
+}
+
+/**
+ * 按文件类型过滤
+ * @param {Array} images - 图片对象数组
+ * @param {Array|string} fileTypes - 允许的文件类型数组或单个文件类型
+ * @returns {Array} 过滤后的图片数组
+ */
+export const filterByFileType = createFilterFunction(fileTypes => {
+  const allowedTypes = Array.isArray(fileTypes) ? 
+    fileTypes.map(type => type.toLowerCase()) : 
+    [fileTypes.toLowerCase()];
+  
+  return img => allowedTypes.includes(img.getFileType().toLowerCase());
+});
+
+/**
+ * 按域名过滤
+ * @param {Array} images - 图片对象数组
+ * @param {Array|string} domains - 允许的域名数组或单个域名
+ * @returns {Array} 过滤后的图片数组
+ */
+export const filterByDomain = createFilterFunction(domains => {
+  const allowedDomains = Array.isArray(domains) ? 
+    domains.map(domain => domain.toLowerCase()) : 
+    [domains.toLowerCase()];
+  
+  return img => allowedDomains.includes(img.getDomain().toLowerCase());
+});
+
+/**
+ * 按图片尺寸过滤
+ * @param {Array} images - 图片对象数组
+ * @param {Object} options - 过滤选项 { minWidth, maxWidth, minHeight, maxHeight }
+ * @returns {Array} 过滤后的图片数组
+ */
+export const filterByDimensions = createFilterFunction(options => {
+  const { minWidth, maxWidth, minHeight, maxHeight } = options || {};
+  
+  return img => {
+    // 如果图片没有尺寸信息，跳过过滤
+    if (!img.width || !img.height) {
+      return false;
+    }
+    
+    if (minWidth !== undefined && img.width < minWidth) return false;
+    if (maxWidth !== undefined && img.width > maxWidth) return false;
+    if (minHeight !== undefined && img.height < minHeight) return false;
+    if (maxHeight !== undefined && img.height > maxHeight) return false;
+    
+    return true;
+  };
+});
+
+// 默认导出所有函数
+export default {
+  // 排序器
+  sortByComparator,
+  sortByFilename,
+  sortByFileType,
+  sortByDomain,
+  incrementalSort,
+  
+  // 分类器
+  categorizeByFunction,
+  categorizeByFileType,
+  categorizeByDomain,
+  getImagesByCategory,
+  
+  // 过滤器
+  filterByFunction,
+  filterByFileType,
+  filterByDomain,
+  filterByDimensions,
+  
+  // 工具函数
+  convertToImageInstances
+};
 
 // 兼容CommonJS
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = imageProcessor;
-  module.exports.default = imageProcessor;
-  module.exports.ImageProcessor = ImageProcessor;
-  module.exports.Image = Image;
+  module.exports = {
+    ...module.exports,
+    ...exports
+  };
 }
 
 // 兼容浏览器环境
 if (typeof window !== 'undefined') {
-  window.imageProcessor = imageProcessor;
-  window.ImageProcessor = ImageProcessor;
+  window.imageProcessor = exports.default;
 }
