@@ -44,6 +44,14 @@ class Image {
    * @private
    */
   _calculateBaseProperties() {
+    // 检查URL是否有效
+    if (!this.url || typeof this.url !== 'string') {
+      this._filename = 'unknown';
+      this._fileType = 'unknown';
+      this._domain = 'unknown';
+      return;
+    }
+    
     // 提取文件名
     try {
       const urlParts = this.url.split('/');
@@ -59,6 +67,8 @@ class Image {
       const extMatch = this.url.match(/\.([^.\s?#]+)(?:[?#]|$)/i);
       if (extMatch && extMatch[1]) {
         this._fileType = extMatch[1].toLowerCase();
+      } else {
+        this._fileType = 'unknown';
       }
     } catch (e) {
       console.error('提取文件类型失败:', e);
@@ -75,6 +85,8 @@ class Image {
         const domainMatch = this.url.match(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/?\n]+)/im);
         if (domainMatch && domainMatch[1]) {
           this._domain = domainMatch[1];
+        } else {
+          this._domain = 'unknown';
         }
       }
     } catch (e) {
@@ -105,6 +117,54 @@ class Image {
    */
   getDomain() {
     return this._domain;
+  }
+
+  /**
+   * 获取图片宽度
+   * @returns {number} 图片宽度
+   */
+  getWidth() {
+    return this.width;
+  }
+
+  /**
+   * 获取图片高度
+   * @returns {number} 图片高度
+   */
+  getHeight() {
+    return this.height;
+  }
+  
+  /**
+   * 获取文件大小（字节数）
+   * @returns {number} 文件大小（字节）
+   */
+  getFileSize() {
+    if (this.size === '未知' || this.size === '加载失败') {
+      return 0;
+    }
+    
+    // 解析大小字符串，例如 "1.23 MB", "456 KB", "789 B"
+    const sizeMatch = this.size.match(/^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)?$/);
+    if (!sizeMatch) {
+      return 0;
+    }
+    
+    const value = parseFloat(sizeMatch[1]);
+    const unit = sizeMatch[2] || 'B';
+    
+    switch (unit) {
+      case 'B':
+        return value;
+      case 'KB':
+        return value * 1024;
+      case 'MB':
+        return value * 1024 * 1024;
+      case 'GB':
+        return value * 1024 * 1024 * 1024;
+      default:
+        return value;
+    }
   }
   
   /**

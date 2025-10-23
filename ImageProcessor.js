@@ -105,6 +105,87 @@ export function sortByFileType(images, ascending = true) {
 }
 
 /**
+ * 按文件大小排序
+ * @param {Array} images - 图片对象数组
+ * @param {boolean} ascending - 是否升序排列，默认为true
+ * @returns {Array} 排序后的图片数组
+ */
+export function sortByFileSize(images, ascending = true) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return sortByComparator(imageInstances, (a, b) => {
+    const aValue = a.getFileSize();
+    const bValue = b.getFileSize();
+    
+    if (aValue < bValue) return ascending ? -1 : 1;
+    if (aValue > bValue) return ascending ? 1 : -1;
+    return 0;
+  });
+}
+
+/**
+ * 按图片尺寸排序
+ * @param {Array} images - 图片对象数组
+ * @param {boolean} ascending - 是否升序排列，默认为true
+ * @returns {Array} 排序后的图片数组
+ */
+export function sortByDimensions(images, ascending = true) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return sortByComparator(imageInstances, (a, b) => {
+    const aArea = a.width * a.height;
+    const bArea = b.width * b.height;
+    
+    if (aArea < bArea) return ascending ? -1 : 1;
+    if (aArea > bArea) return ascending ? 1 : -1;
+    return 0;
+  });
+}
+
+/**
+ * 按宽高比排序
+ * @param {Array} images - 图片对象数组
+ * @param {boolean} ascending - 是否升序排列，默认为true
+ * @returns {Array} 排序后的图片数组
+ */
+export function sortByAspectRatio(images, ascending = true) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+  
+  if (images.length <= 1) {
+    return [...images];
+  }
+  
+  const imageInstances = convertToImageInstances(images);
+  
+  return sortByComparator(imageInstances, (a, b) => {
+    const aRatio = a.width / a.height;
+    const bRatio = b.width / b.height;
+    
+    if (aRatio < bRatio) return ascending ? -1 : 1;
+    if (aRatio > bRatio) return ascending ? 1 : -1;
+    return 0;
+  });
+}
+
+/**
  * 按域名排序
  * @param {Array} images - 图片对象数组
  * @param {boolean} ascending - 是否升序排列，默认为true
@@ -217,6 +298,17 @@ export function getImagesByCategory(categories, categoryValue) {
   return categories[categoryValue] || [];
 }
 
+/**
+ * 创建过滤函数工厂
+ * @param {Function} filterGetter - 从图片对象获取过滤条件的函数
+ * @returns {Function} 过滤函数
+ */
+function createFilterFunction(filterGetter) {
+  return (images, filterValue) => {
+    return filterByFunction(images, filterGetter(filterValue));
+  };
+}
+
 // ===== 纯函数式过滤器（filterByXXX系列函数） =====
 
 /**
@@ -293,6 +385,9 @@ export default {
   sortByComparator,
   sortByFilename,
   sortByFileType,
+  sortByFileSize,
+  sortByDimensions,
+  sortByAspectRatio,
   sortByDomain,
   incrementalSort,
   
@@ -316,11 +411,45 @@ export default {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ...module.exports,
-    ...exports
+    sortByComparator,
+    sortByFilename,
+    sortByFileType,
+    sortByFileSize,
+    sortByDimensions,
+    sortByAspectRatio,
+    sortByDomain,
+    incrementalSort,
+    categorizeByFunction,
+    categorizeByFileType,
+    categorizeByDomain,
+    getImagesByCategory,
+    filterByFunction,
+    filterByFileType,
+    filterByDomain,
+    filterByDimensions,
+    convertToImageInstances
   };
 }
 
 // 兼容浏览器环境
 if (typeof window !== 'undefined') {
-  window.imageProcessor = exports.default;
+  window.imageProcessor = {
+    sortByComparator,
+    sortByFilename,
+    sortByFileType,
+    sortByFileSize,
+    sortByDimensions,
+    sortByAspectRatio,
+    sortByDomain,
+    incrementalSort,
+    categorizeByFunction,
+    categorizeByFileType,
+    categorizeByDomain,
+    getImagesByCategory,
+    filterByFunction,
+    filterByFileType,
+    filterByDomain,
+    filterByDimensions,
+    convertToImageInstances
+  };
 }

@@ -1,7 +1,6 @@
-/**
- * 结果页面脚本
- * 显示从网页获取的图片链接，提供搜索、过滤和下载功能
- */
+import { categorizeByFileType, categorizeByDomain, sortByDimensions } from './ImageProcessor.js';
+import Image from './Image.js';
+import cacheManager from './CacheManager.js';
 
 document.addEventListener('DOMContentLoaded', function() {
   // 获取DOM元素
@@ -19,11 +18,15 @@ document.addEventListener('DOMContentLoaded', function() {
   const noImages = document.getElementById('noImages');
   const imageGrid = document.getElementById('imageGrid');
   const toast = document.getElementById('toast');
+  const categorySelect = document.getElementById('categorySelect');
+  const sortSelect = document.getElementById('sortSelect');
   
   // 状态变量
   let allImages = [];
   let filteredImages = [];
   let currentView = 'grid'; // 'grid' 或 'list'
+  let currentCategory = 'none';
+  let currentSort = 'default';
   let isCollectingMore = false;
   let updateInterval = null;
   let lastUpdated = 0;
@@ -47,69 +50,84 @@ document.addEventListener('DOMContentLoaded', function() {
    * @param {Array} images 需要获取信息的图片数组
    */
   function fetchImageDetails(images) {
-    images.forEach(image => {
-      // 从URL中提取图片格式
-      const url = image.url;
-      const formatMatch = url.match(/\.([^.]+)(?:[?#]|$)/i);
-      image.format = formatMatch ? formatMatch[1].toLowerCase() : 'unknown';
-      
-      // 标记图片信息加载状态
-      image.detailsLoaded = false;
-      
-      // 使用Image对象异步获取图片大小
-      const imgObj = new Image();
-      
-      // 设置超时处理
-      const timeout = setTimeout(() => {
-        image.width = 0;
-        image.height = 0;
-        image.size = '未知';
-        image.detailsLoaded = true;
+    const batchSize = 10;
+    let currentIndex = 0;
+
+    function processBatch() {
+      const batch = images.slice(currentIndex, currentIndex + batchSize);
+      if (batch.length === 0) {
+        return;
+      }
+
+      batch.forEach(image => {
+        // 从URL中提取图片格式
+        const url = image.url;
+        const formatMatch = url.match(/\.([^.]+)(?:[?#]|$)/i);
+        image.format = formatMatch ? formatMatch[1].toLowerCase() : 'unknown';
         
-        // 更新对应图片的DOM显示
-        updateImageDetailsInDOM(image.id, image);
-      }, 5000); // 5秒超时
-      
-      imgObj.onload = function() {
-        clearTimeout(timeout); // 清除超时
+        // 标记图片信息加载状态
+        image.detailsLoaded = false;
         
-        // 添加图片尺寸信息
-        image.width = this.width;
-        image.height = this.height;
-        image.aspectRatio = this.width / this.height;
+        // 使用Image对象异步获取图片大小
+        const imgObj = new Image(url);
         
-        // 估算图片大小（实际大小需要通过fetch获取，这里只做估算）
-        // 简单估算：假设平均每像素3字节（RGB）
-        const estimatedSizeInBytes = this.width * this.height * 3;
-        if (estimatedSizeInBytes < 1024) {
-          image.size = estimatedSizeInBytes + ' B';
-        } else if (estimatedSizeInBytes < 1024 * 1024) {
-          image.size = (estimatedSizeInBytes / 1024).toFixed(2) + ' KB';
-        } else {
-          image.size = (estimatedSizeInBytes / (1024 * 1024)).toFixed(2) + ' MB';
-        }
+        // 设置超时处理
+        const timeout = setTimeout(() => {
+          image.width = 0;
+          image.height = 0;
+          image.size = '未知';
+          image.detailsLoaded = true;
+          
+          // 更新对应图片的DOM显示
+          updateImageDetailsInDOM(image.id, image);
+        }, 5000); // 5秒超时
         
-        image.detailsLoaded = true;
+        imgObj.onload = function() {
+          clearTimeout(timeout); // 清除超时
+          
+          // 添加图片尺寸信息
+          image.width = this.width;
+          image.height = this.height;
+          image.aspectRatio = this.width / this.height;
+          
+          // 估算图片大小（实际大小需要通过fetch获取，这里只做估算）
+          // 简单估算：假设平均每像素3字节（RGB）
+          const estimatedSizeInBytes = this.width * this.height * 3;
+          if (estimatedSizeInBytes < 1024) {
+            image.size = estimatedSizeInBytes + ' B';
+          } else if (estimatedSizeInBytes < 1024 * 1024) {
+            image.size = (estimatedSizeInBytes / 1024).toFixed(2) + ' KB';
+          } else {
+            image.size = (estimatedSizeInBytes / (1024 * 1024)).toFixed(2) + ' MB';
+          }
+          
+          image.detailsLoaded = true;
+          
+          // 更新对应图片的DOM显示
+          updateImageDetailsInDOM(image.id, image);
+        };
         
-        // 更新对应图片的DOM显示
-        updateImageDetailsInDOM(image.id, image);
-      };
-      
-      imgObj.onerror = function() {
-        clearTimeout(timeout); // 清除超时
-        image.width = 0;
-        image.height = 0;
-        image.size = '加载失败';
-        image.detailsLoaded = true;
+        imgObj.onerror = function() {
+          clearTimeout(timeout); // 清除超时
+          image.width = 0;
+          image.height = 0;
+          image.size = '加载失败';
+          image.detailsLoaded = true;
+          
+          // 更新对应图片的DOM显示
+          updateImageDetailsInDOM(image.id, image);
+        };
         
-        // 更新对应图片的DOM显示
-        updateImageDetailsInDOM(image.id, image);
-      };
-      
-      // 启用跨域支持
-      imgObj.crossOrigin = 'anonymous';
-      imgObj.src = url;
-    });
+        // 启用跨域支持
+        imgObj.crossOrigin = 'anonymous';
+        imgObj.src = url;
+      });
+
+      currentIndex += batchSize;
+      setTimeout(processBatch, 500); // 每500毫秒处理下一批
+    }
+
+    processBatch();
   }
   
   /**
@@ -164,6 +182,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 如果有新图片，添加到列表
         if (newUrls.length > 0) {
+          // 清理缓存，因为数据已更新
+          cacheManager.clearAllCaches();
+
           const newImages = newUrls.map(url => ({
             url: url,
             selected: false,
@@ -265,9 +286,29 @@ document.addEventListener('DOMContentLoaded', function() {
    * 设置事件监听器
    */
   function setupEventListeners() {
+    function debounce(func, delay) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+    
     // 搜索框
-    searchBox.addEventListener('input', function() {
-      filterImages();
+    searchBox.addEventListener('input', debounce(function() {
+        filterImages();
+    }, 300));
+
+    // 分类选择
+    categorySelect.addEventListener('change', function() {
+      currentCategory = this.value;
+      renderImages();
+    });
+
+    // 排序选择
+    sortSelect.addEventListener('change', function() {
+      currentSort = this.value;
+      renderImages();
     });
     
     // 视图切换按钮
@@ -338,25 +379,146 @@ document.addEventListener('DOMContentLoaded', function() {
    * 渲染图片
    */
   function renderImages() {
-    // 清空容器
-    imageGrid.innerHTML = '';
+    const fragment = document.createDocumentFragment();
     
     // 设置视图类
     imageGrid.className = currentView === 'grid' ? 'image-grid' : 'image-grid list-view';
     
-    // 渲染每个图片
-    filteredImages.forEach(image => {
-      const imageItem = createImageItem(image);
-      imageGrid.appendChild(imageItem);
-    });
+    let imagesToRender = filteredImages;
+
+    // 排序
+    imagesToRender = sortImages(imagesToRender);
+
+    if (currentCategory !== 'none') {
+      const imageInstances = imagesToRender.map(img => new Image(img.url, img.id));
+      let categories;
+      if (currentCategory === 'fileType') {
+        categories = categorizeByFileType(imageInstances);
+      } else if (currentCategory === 'domain') {
+        categories = categorizeByDomain(imageInstances);
+      }
+
+      for (const category in categories) {
+        const categoryContainer = document.createElement('div');
+        categoryContainer.className = 'category-container';
+
+        const categoryHeader = document.createElement('h2');
+        categoryHeader.className = 'category-header';
+        categoryHeader.textContent = category;
+        categoryContainer.appendChild(categoryHeader);
+
+        const categoryGrid = document.createElement('div');
+        categoryGrid.className = currentView === 'grid' ? 'image-grid' : 'image-grid list-view';
+        
+        categories[category].forEach(image => {
+          const imageItem = createImageItem(image);
+          categoryGrid.appendChild(imageItem);
+        });
+
+        categoryContainer.appendChild(categoryGrid);
+        fragment.appendChild(categoryContainer);
+      }
+    } else {
+      // 渲染每个图片
+      imagesToRender.forEach(image => {
+        const imageItem = createImageItem(image);
+        fragment.appendChild(imageItem);
+      });
+    }
     
+    // 清空容器并追加fragment
+    imageGrid.innerHTML = '';
+    imageGrid.appendChild(fragment);
+
     // 更新图片计数
     imageCount.textContent = filteredImages.length;
     
     // 为现有图片获取详情
     fetchDetailsForExistingImages();
   }
-  
+
+  /**
+   * 对图片进行排序
+   * @param {Array} images 要排序的图片数组
+   * @returns {Array} 排序后的图片数组
+   */
+  function sortImages(images) {
+    const [sortBy, sortOrder] = currentSort.split('-');
+
+    if (sortBy === 'default') {
+      return images;
+    }
+
+    // 使用缓存来优化排序性能
+    const cacheKey = `sort_${currentSort}_${images.length}`;
+    const cachedResult = cacheManager.getCachedData(cacheKey);
+    
+    if (cachedResult) {
+      console.log('使用缓存的排序结果');
+      return cachedResult;
+    }
+
+    let sortedImages;
+    
+    switch (sortBy) {
+      case 'filename':
+      case 'fileType':
+      case 'domain':
+        sortedImages = [...images].sort((a, b) => {
+          let valA, valB;
+
+          switch (sortBy) {
+            case 'filename':
+              valA = a.url.split('/').pop();
+              valB = b.url.split('/').pop();
+              break;
+            case 'fileType':
+              valA = a.format || '';
+              valB = b.format || '';
+              break;
+            case 'domain':
+              try {
+                valA = new URL(a.url).hostname;
+                valB = new URL(b.url).hostname;
+              } catch (e) {
+                valA = '';
+                valB = '';
+              }
+              break;
+            default:
+              return 0;
+          }
+
+          if (sortOrder === 'asc') {
+            return valA.localeCompare(valB);
+          } else {
+            return valB.localeCompare(valA);
+          }
+        });
+        break;
+      
+      case 'dimensions':
+        // 使用ImageProcessor.js中的sortByDimensions函数
+        const imageInstances = images.map(img => new Image(img.url, img.id));
+        const sortedInstances = sortByDimensions(imageInstances, sortOrder === 'asc');
+        sortedImages = sortedInstances.map(imgInstance => {
+          // 找到对应的原始图片对象
+          const originalImg = images.find(img => img.id === imgInstance.id);
+          return originalImg || imgInstance;
+        });
+        break;
+        
+      default:
+        sortedImages = images;
+        break;
+    }
+    
+    // 缓存排序结果
+    cacheManager.setCachedData(cacheKey, sortedImages);
+    
+    return sortedImages;
+  }
+
   /**
    * 创建图片项
    */
