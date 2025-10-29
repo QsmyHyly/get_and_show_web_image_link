@@ -15,19 +15,34 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       const activeTab = tabs[0];
       
-      // 先注入内容脚本，然后发送消息
-      chrome.scripting.executeScript({
-        target: { tabId: activeTab.id },
-        files: ['content.js']
-      }, function() {
-        if (chrome.runtime.lastError) {
-          statusDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
-          getImagesBtn.disabled = false;
-          return;
+      // 检查内容脚本是否已经注入
+      chrome.tabs.sendMessage(activeTab.id, { action: 'ping' }, function(pingResponse) {
+        if (chrome.runtime.lastError || !pingResponse || !pingResponse.success) {
+          // 内容脚本未注入，需要先注入
+          statusDiv.textContent = '正在注入脚本...';
+          chrome.scripting.executeScript({
+            target: { tabId: activeTab.id },
+            files: ['content.js']
+          }, function() {
+            if (chrome.runtime.lastError) {
+              statusDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
+              getImagesBtn.disabled = false;
+              return;
+            }
+            
+            // 注入完成后，发送获取图片的消息
+            statusDiv.textContent = '正在获取图片链接...';
+            sendGetImagesMessage(activeTab.id);
+          });
+        } else {
+          // 内容脚本已存在，直接发送消息
+          sendGetImagesMessage(activeTab.id);
         }
-        
-        // 向内容脚本发送消息，请求获取图片链接
-        chrome.tabs.sendMessage(activeTab.id, { action: 'getImages' }, function(response) {
+      });
+      
+      // 发送获取图片消息的函数
+      function sendGetImagesMessage(tabId) {
+        chrome.tabs.sendMessage(tabId, { action: 'getImages' }, function(response) {
           if (chrome.runtime.lastError) {
             statusDiv.textContent = '错误: ' + chrome.runtime.lastError.message;
             getImagesBtn.disabled = false;
@@ -69,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
             getImagesBtn.disabled = false;
           }
         });
-      });
+      }
     });
   });
 });

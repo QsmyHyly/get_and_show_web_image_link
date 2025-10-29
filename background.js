@@ -18,18 +18,33 @@ chrome.runtime.onInstalled.addListener(function(details) {
 // 右键菜单点击事件
 chrome.contextMenus.onClicked.addListener(function(info, tab) {
   if (info.menuItemId === 'getImages') {
-    // 先注入内容脚本，然后发送消息
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    }, function() {
-      if (chrome.runtime.lastError) {
-        console.error('注入内容脚本时出错:', chrome.runtime.lastError.message);
-        return;
+    // 检查内容脚本是否已经注入
+    chrome.tabs.sendMessage(tab.id, { action: 'ping' }, function(pingResponse) {
+      if (chrome.runtime.lastError || !pingResponse || !pingResponse.success) {
+        // 内容脚本未注入，需要先注入
+        console.log('注入内容脚本到标签页:', tab.id);
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }, function() {
+          if (chrome.runtime.lastError) {
+            console.error('注入内容脚本时出错:', chrome.runtime.lastError.message);
+            return;
+          }
+          
+          // 注入完成后，发送获取图片的消息
+          sendGetImagesMessage(tab.id, tab);
+        });
+      } else {
+        // 内容脚本已存在，直接发送消息
+        console.log('内容脚本已存在，直接发送消息');
+        sendGetImagesMessage(tab.id, tab);
       }
-      
-      // 向内容脚本发送消息，请求获取图片链接
-      chrome.tabs.sendMessage(tab.id, { action: 'getImages' }, function(response) {
+    });
+    
+    // 发送获取图片消息的函数
+    function sendGetImagesMessage(tabId, tabInfo) {
+      chrome.tabs.sendMessage(tabId, { action: 'getImages' }, function(response) {
         if (chrome.runtime.lastError) {
           console.error('获取图片链接时出错:', chrome.runtime.lastError.message);
           return;
@@ -41,8 +56,8 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
           // 将图片URL存储到chrome.storage中
           chrome.storage.local.set({ 
             imageUrls: response.imageUrls,
-            pageTitle: tab.title,
-            pageUrl: tab.url
+            pageTitle: tabInfo.title,
+            pageUrl: tabInfo.url
           }, function() {
             // 打开结果页面
             chrome.tabs.create({ url: 'results.html' });
@@ -51,7 +66,7 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
           console.error('获取图片链接失败:', response.error);
         }
       });
-    });
+    }
   }
 });
 
