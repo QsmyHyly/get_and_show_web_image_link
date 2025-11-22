@@ -158,6 +158,31 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return true; // 表示异步响应
   }
   
+  if (request.action === 'downloadZip') {
+    // 处理ZIP下载请求
+    console.log('收到ZIP下载请求');
+    
+    const downloadOptions = request.downloadOptions;
+    
+    chrome.downloads.download(downloadOptions, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.error('ZIP下载失败:', chrome.runtime.lastError.message);
+        sendResponse({ 
+          success: false, 
+          error: chrome.runtime.lastError.message
+        });
+      } else {
+        console.log('ZIP下载已启动:', downloadOptions.filename);
+        sendResponse({ 
+          success: true,
+          downloadId: downloadId
+        });
+      }
+    });
+    
+    return true; // 表示异步响应
+  }
+  
   // 记录未知消息类型
   console.log('收到未知消息类型:', request);
 });

@@ -809,8 +809,21 @@ document.addEventListener('DOMContentLoaded', function() {
     showToast(`开始准备打包 ${selectedImages.length} 个图片...`);
     
     try {
-      // 动态导入本地JSZip库
-      const { default: JSZip } = await import('./node_modules/jszip/dist/jszip.min.js');
+      // 检查JSZip是否已加载
+      if (typeof JSZip === 'undefined') {
+        // 动态加载JSZip库
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('node_modules/jszip/dist/jszip.min.js');
+        document.head.appendChild(script);
+        
+        // 等待脚本加载
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+        });
+      }
+      
+      // 创建JSZip实例
       const zip = new JSZip();
       
       // 添加选中的图片到ZIP
@@ -864,17 +877,41 @@ document.addEventListener('DOMContentLoaded', function() {
       // 生成ZIP文件
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       
-      // 创建下载链接
+      // 使用chrome.downloads API下载ZIP文件，显示保存对话框
       const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `图片打包_${Date.now()}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const downloadOptions = {
+        url: url,
+        filename: `图片打包_${Date.now()}.zip`,
+        saveAs: true, // 显示保存对话框，让用户选择下载位置
+        conflictAction: 'uniquify' // 如果文件已存在，自动重命名
+      };
       
-      showToast(`成功打包 ${selectedImages.length} 个图片`);
+      // 发送下载请求到后台脚本，因为chrome.downloads API只能在后台使用
+      const downloadData = {
+        action: 'downloadZip',
+        downloadOptions: downloadOptions
+      };
+      
+      chrome.runtime.sendMessage(downloadData, function(response) {
+        if (chrome.runtime.lastError) {
+          console.error('发送下载请求失败:', chrome.runtime.lastError.message);
+          // 如果后台下载失败，回退到直接下载方式
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `图片打包_${Date.now()}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast(`打包完成，已使用默认下载位置`);
+        } else if (response && response.success) {
+          showToast(`成功打包 ${selectedImages.length} 个图片，正在下载...`);
+        } else if (response && response.error) {
+          showToast('下载失败: ' + response.error);
+        }
+      });
+      
+      // 注意：URL.revokeObjectURL(url) 不能立即调用，因为后台脚本可能还在使用它
+      // 所以不立即撤销URL，让浏览器在下载完成后自动清理
     } catch (error) {
       console.error('打包ZIP时出错:', error);
       showToast('打包失败: ' + error.message);
