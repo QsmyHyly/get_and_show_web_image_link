@@ -809,8 +809,8 @@ document.addEventListener('DOMContentLoaded', function() {
     showToast(`开始准备打包 ${selectedImages.length} 个图片...`);
     
     try {
-      // 动态导入JSZip库
-      const { default: JSZip } = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+      // 动态导入本地JSZip库
+      const { default: JSZip } = await import('./node_modules/jszip/dist/jszip.min.js');
       const zip = new JSZip();
       
       // 添加选中的图片到ZIP

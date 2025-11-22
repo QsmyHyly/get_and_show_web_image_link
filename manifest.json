@@ -19,7 +19,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["results.html"],
+      "resources": ["results.html", "node_modules/jszip/dist/jszip.min.js"],
       "matches": ["<all_urls>"]
     }
   ],
