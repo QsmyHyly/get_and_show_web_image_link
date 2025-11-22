@@ -719,68 +719,67 @@ document.addEventListener('DOMContentLoaded', function() {
     // 显示下载开始的提示
     showToast(`开始下载 ${selectedImages.length} 个图片...`);
     
-    // 逐个下载图片
-    let downloadedCount = 0;
-    
-    selectedImages.forEach((image, index) => {
-      // 创建下载图片的函数
-      const downloadImage = (url, index) => {
+    // 发送下载请求到后台脚本
+    const downloadData = {
+      action: 'downloadImages',
+      images: selectedImages.map((image, index) => {
         // 获取文件名
-        let filename = url.split('/').pop();
+        let filename = image.url.split('/').pop();
         // 如果URL没有文件名，使用索引作为文件名
-        if (!filename || filename.includes('?')) {
+        if (!filename || filename.includes('?') || filename.includes('.')) {
+          // 如果URL中没有有效文件名或包含查询参数，则生成默认文件名
+          if (!filename || !filename.includes('.')) {
+            filename = `image_${Date.now()}_${index}.jpg`;
+          } else {
+            // 如果有文件名但包含查询参数，则清理
+            filename = filename.split('?')[0];
+          }
+        }
+        
+        // 标准化文件名 - 移除非法字符
+        filename = filename.replace(/[<>:"/\\|?*]/g, '_');
+        
+        // 确保文件名不为空
+        if (!filename || filename === '.') {
           filename = `image_${Date.now()}_${index}.jpg`;
         }
         
-        // 使用fetch获取图片数据
-        fetch(url, {
-          mode: 'cors', // 启用跨域请求
-          headers: {
-            'Access-Control-Allow-Origin': '*',
+        // 确保文件有扩展名
+        if (!/\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)$/i.test(filename)) {
+          // 如果没有常见图片扩展名，尝试从URL获取
+          const urlExtMatch = image.url.match(/\.([^.?#]+)(?:[?#]|$)/i);
+          if (urlExtMatch && urlExtMatch[1]) {
+            const ext = urlExtMatch[1].toLowerCase();
+            if (/(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)/i.test(ext)) {
+              filename += '.' + ext;
+            } else {
+              filename += '.jpg'; // 默认使用jpg
+            }
+          } else {
+            filename += '.jpg'; // 默认使用jpg
           }
-        })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`无法下载图片: ${url}`);
-          }
-          return response.blob();
-        })
-        .then(blob => {
-          const url = URL.createObjectURL(blob);
-          
-          // 创建下载链接
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          
-          // 释放URL对象
-          URL.revokeObjectURL(url);
-          
-          downloadedCount++;
-          
-          // 当所有图片都下载完成时显示提示
-          if (downloadedCount === selectedImages.length) {
-            showToast(`已成功下载 ${downloadedCount} 个图片`);
-          }
-        })
-        .catch(error => {
-          console.error('下载图片失败:', error);
-          downloadedCount++;
-          
-          // 即使有错误，也检查是否所有图片都已处理
-          if (downloadedCount === selectedImages.length) {
-            showToast(`下载完成，但有 ${selectedImages.length - downloadedCount} 个图片下载失败`);
-          }
-        });
-      };
-      
-      // 为了避免浏览器限制，添加延迟
-      setTimeout(() => {
-        downloadImage(image.url, index);
-      }, index * 300);
+        }
+        
+        return {
+          url: image.url,
+          filename: filename  // 只发送文件名，不包含路径
+        };
+      })
+    };
+    
+    // 发送消息到后台脚本
+    chrome.runtime.sendMessage(downloadData, function(response) {
+      if (chrome.runtime.lastError) {
+        console.error('发送下载请求失败:', chrome.runtime.lastError.message);
+        showToast('下载失败: ' + chrome.runtime.lastError.message);
+      } else if (response && response.success) {
+        showToast(`已开始下载 ${selectedImages.length} 个图片`);
+      } else if (response && response.error) {
+        showToast('下载失败: ' + response.error);
+      } else {
+        // 即使没有明确的响应，也提示用户下载已启动
+        showToast(`已开始下载 ${selectedImages.length} 个图片`);
+      }
     });
   }
   

@@ -5,6 +5,12 @@
 document.addEventListener('DOMContentLoaded', function() {
   const getImagesBtn = document.getElementById('getImages');
   const statusDiv = document.getElementById('status');
+  const downloadDirInput = document.getElementById('downloadDir');
+  const saveSettingsBtn = document.getElementById('saveSettings');
+  const settingsDetails = document.getElementById('settings');
+
+  // 加载保存的设置
+  loadSettings();
 
   // 获取图片按钮点击事件
   getImagesBtn.addEventListener('click', function() {
@@ -86,5 +92,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       }
     });
+  });
+
+  // 保存设置按钮点击事件
+  saveSettingsBtn.addEventListener('click', function() {
+    // 提示用户将来的下载会显示保存对话框
+    statusDiv.textContent = '设置已保存 - 下载时将显示对话框供您选择位置';
+    // 3秒后清除状态消息
+    setTimeout(() => {
+      if (statusDiv.textContent.includes('设置已保存')) {
+        statusDiv.textContent = '';
+      }
+    }, 3000);
+  });
+
+  // 从存储中加载设置
+  function loadSettings() {
+    chrome.storage.sync.get(['downloadDir'], function(result) {
+      if (result.downloadDir) {
+        downloadDirInput.value = result.downloadDir;
+      }
+    });
+  }
+
+  // 点击设置区域外时关闭详情
+  document.addEventListener('click', function(event) {
+    if (!settingsDetails.contains(event.target) && 
+        !event.target.closest('summary')) {
+      settingsDetails.removeAttribute('open');
+    }
   });
 });

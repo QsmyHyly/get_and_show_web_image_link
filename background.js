@@ -103,6 +103,60 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return true; // 表示异步响应
   }
   
+  if (request.action === 'downloadImages') {
+    // 处理下载图片请求
+    console.log('收到下载请求:', request.images.length, '张图片');
+    
+    let downloadedCount = 0;
+    const totalImages = request.images.length;
+    
+    // 如果没有图片需要下载，直接返回
+    if (totalImages === 0) {
+      sendResponse({ success: false, error: '没有图片需要下载' });
+      return true;
+    }
+    
+    // 逐个下载图片
+    request.images.forEach((image, index) => {
+      const downloadOptions = {
+        url: image.url,
+        filename: image.filename,
+        saveAs: true, // 显示保存对话框，让用户选择下载位置
+        conflictAction: 'uniquify' // 如果文件已存在，自动重命名
+      };
+      
+      chrome.downloads.download(downloadOptions, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          console.error('下载失败:', chrome.runtime.lastError.message, image.url);
+          downloadedCount++;
+          
+          // 即使有错误，也检查是否所有图片都已处理
+          if (downloadedCount === totalImages) {
+            sendResponse({ 
+              success: false, 
+              error: chrome.runtime.lastError.message,
+              downloaded: downloadedCount
+            });
+          }
+        } else {
+          console.log('开始下载:', image.filename);
+          downloadedCount++;
+          
+          // 当所有图片都下载完成时返回响应
+          if (downloadedCount === totalImages) {
+            console.log('所有图片下载任务已启动');
+            sendResponse({ 
+              success: true,
+              downloaded: downloadedCount
+            });
+          }
+        }
+      });
+    });
+    
+    return true; // 表示异步响应
+  }
+  
   // 记录未知消息类型
   console.log('收到未知消息类型:', request);
 });
