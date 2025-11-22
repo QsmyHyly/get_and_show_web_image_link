@@ -334,6 +334,18 @@ document.addEventListener('DOMContentLoaded', function() {
       downloadSelected();
     });
     
+    // 打包下载ZIP按钮
+    const downloadZipBtn = document.getElementById('downloadZipBtn');
+    downloadZipBtn.addEventListener('click', function() {
+      downloadZip();
+    });
+    
+    // 新标签页打开按钮
+    const openInNewTabBtn = document.getElementById('openInNewTabBtn');
+    openInNewTabBtn.addEventListener('click', function() {
+      openSelectedInNewTabs();
+    });
+    
     // 复制所有URL按钮
     copyAllBtn.addEventListener('click', function() {
       copyAllUrls();
@@ -783,6 +795,122 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  /**
+   * 打包下载选中的图片为ZIP
+   */
+  async function downloadZip() {
+    const selectedImages = allImages.filter(image => image.selected);
+    
+    if (selectedImages.length === 0) {
+      showToast('请先选择要下载的图片');
+      return;
+    }
+    
+    showToast(`开始准备打包 ${selectedImages.length} 个图片...`);
+    
+    try {
+      // 动态导入JSZip库
+      const { default: JSZip } = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+      const zip = new JSZip();
+      
+      // 添加选中的图片到ZIP
+      const promises = selectedImages.map(async (image, index) => {
+        try {
+          // 获取文件名
+          let filename = image.url.split('/').pop();
+          if (!filename || filename.includes('?')) {
+            filename = `image_${Date.now()}_${index}.jpg`;
+          } else {
+            filename = filename.split('?')[0]; // 移除查询参数
+          }
+          
+          // 确保文件名不为空
+          if (!filename || filename === '.') {
+            filename = `image_${Date.now()}_${index}.jpg`;
+          }
+          
+          // 确保文件有扩展名
+          if (!/\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)$/i.test(filename)) {
+            const urlExtMatch = image.url.match(/\.([^.?#]+)(?:[?#]|$)/i);
+            if (urlExtMatch && urlExtMatch[1]) {
+              const ext = urlExtMatch[1].toLowerCase();
+              if (/(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)/i.test(ext)) {
+                filename += '.' + ext;
+              } else {
+                filename += '.jpg'; // 默认使用jpg
+              }
+            } else {
+              filename += '.jpg'; // 默认使用jpg
+            }
+          }
+          
+          // 获取图片数据
+          const response = await fetch(image.url);
+          if (!response.ok) {
+            throw new Error(`无法获取图片: ${image.url}`);
+          }
+          const blob = await response.blob();
+          
+          // 将图片添加到ZIP
+          zip.file(filename, blob);
+        } catch (error) {
+          console.error('添加图片到ZIP时出错:', error, image.url);
+        }
+      });
+      
+      // 等待所有图片处理完成
+      await Promise.all(promises);
+      
+      // 生成ZIP文件
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // 创建下载链接
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `图片打包_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast(`成功打包 ${selectedImages.length} 个图片`);
+    } catch (error) {
+      console.error('打包ZIP时出错:', error);
+      showToast('打包失败: ' + error.message);
+    }
+  }
+
+  /**
+   * 在新标签页中打开选中的图片
+   */
+  function openSelectedInNewTabs() {
+    const selectedImages = allImages.filter(image => image.selected);
+    
+    if (selectedImages.length === 0) {
+      showToast('请先选择要打开的图片');
+      return;
+    }
+    
+    // 限制同时打开的标签页数量，避免浏览器限制
+    const maxTabs = 10;
+    if (selectedImages.length > maxTabs) {
+      if (!confirm(`您选择了 ${selectedImages.length} 张图片，确定要在新标签页中全部打开吗？建议不超过 ${maxTabs} 张。`)) {
+        return;
+      }
+    }
+    
+    // 在新标签页中打开每张选中的图片
+    selectedImages.forEach((image, index) => {
+      // 添加延迟以避免同时打开太多标签页
+      setTimeout(() => {
+        window.open(image.url, '_blank');
+      }, index * 300); // 每次延迟300毫秒打开一个新标签页
+    });
+    
+    showToast(`正在新标签页中打开 ${selectedImages.length} 个图片`);
+  }
+
   /**
    * 复制所有URL
    */

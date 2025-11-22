@@ -107,7 +107,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     // 处理下载图片请求
     console.log('收到下载请求:', request.images.length, '张图片');
     
-    let downloadedCount = 0;
     const totalImages = request.images.length;
     
     // 如果没有图片需要下载，直接返回
@@ -116,8 +115,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       return true;
     }
     
-    // 逐个下载图片
-    request.images.forEach((image, index) => {
+    // 下载所有图片，每次下载都使用 saveAs: true 让用户选择保存位置
+    let downloadedCount = 0;
+    
+    request.images.forEach((image) => {
       const downloadOptions = {
         url: image.url,
         filename: image.filename,
