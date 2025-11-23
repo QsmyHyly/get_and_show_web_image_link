@@ -1,6 +1,7 @@
 import { categorizeByFileType, categorizeByDomain, sortByDimensions } from './ImageProcessor.js';
 import Image from './Image.js';
 import cacheManager from './CacheManager.js';
+import ImageCollectionManager from './ImageCollectionManager.js';
 
 document.addEventListener('DOMContentLoaded', function() {
   // 获取DOM元素
@@ -28,8 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentCategory = 'none';
   let currentSort = 'default';
   let isCollectingMore = false;
-  let updateInterval = null;
   let lastUpdated = 0;
+  let imageCollectionManager = null;
   
   // 初始化
   init();
@@ -202,13 +203,19 @@ document.addEventListener('DOMContentLoaded', function() {
           fetchImageDetails(newImages);
         }
         
-        // 如果正在收集更多图片，启动定期更新
+        // 如果正在收集更多图片，使用新的管理器启动收集
         if (isCollectingMore) {
-          showCollectingMoreStatus();
-          startUpdateInterval();
+          if (!imageCollectionManager) {
+            imageCollectionManager = new ImageCollectionManager(
+              handleImagesUpdate,  // 图片更新回调
+              loadImagesFromStorage  // 加载图片函数
+            );
+          }
+          imageCollectionManager.startCollection();
         } else {
-          hideCollectingMoreStatus();
-          stopUpdateInterval();
+          if (imageCollectionManager) {
+            imageCollectionManager.stopCollection();
+          }
         }
         
         // 隐藏加载动画
@@ -219,66 +226,49 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingSpinner.style.display = 'none';
         noImages.style.display = 'block';
         
-        // 停止更新间隔
-        stopUpdateInterval();
+        // 停止收集（如果正在运行）
+        if (imageCollectionManager) {
+          imageCollectionManager.stopCollection();
+        }
       }
     });
   }
   
   /**
-   * 显示正在收集更多图片的状态
+   * 图片更新回调函数
+   * 当ImageCollectionManager检测到新图片时调用
    */
-  function showCollectingMoreStatus() {
-    // 检查是否已有状态指示器
-    let statusIndicator = document.getElementById('collectingMoreStatus');
+  function handleImagesUpdate(data) {
+    // 更新页面信息
+    pageTitle.textContent = data.pageTitle || '未知页面';
+    pageUrl.textContent = data.pageUrl || '';
     
-    if (!statusIndicator) {
-      // 创建新的状态指示器
-      statusIndicator = document.createElement('div');
-      statusIndicator.id = 'collectingMoreStatus';
-      statusIndicator.className = 'collecting-status';
-      statusIndicator.innerHTML = '<div class="spinner"></div><span>正在搜索更多图片...</span>';
+    // 检查是否有图片数据
+    if (data.imageUrls && data.imageUrls.length > 0) {
+      // 合并新的图片到现有列表，避免重复
+      const newUrls = data.imageUrls.filter(url => !allImages.some(img => img.url === url));
       
-      // 添加到页面
-      const header = document.querySelector('.header');
-      header.appendChild(statusIndicator);
-    }
-    
-    statusIndicator.style.display = 'flex';
-  }
-  
-  /**
-   * 隐藏正在收集更多图片的状态
-   */
-  function hideCollectingMoreStatus() {
-    const statusIndicator = document.getElementById('collectingMoreStatus');
-    if (statusIndicator) {
-      statusIndicator.style.display = 'none';
-    }
-  }
-  
-  /**
-   * 启动定期更新图片列表的间隔
-   */
-  function startUpdateInterval() {
-    // 如果已经有间隔在运行，先清除
-    if (updateInterval) {
-      clearInterval(updateInterval);
-    }
-    
-    // 每2秒检查一次更新
-    updateInterval = setInterval(() => {
-      loadImagesFromStorage();
-    }, 2000);
-  }
-  
-  /**
-   * 停止定期更新图片列表的间隔
-   */
-  function stopUpdateInterval() {
-    if (updateInterval) {
-      clearInterval(updateInterval);
-      updateInterval = null;
+      // 如果有新图片，添加到列表
+      if (newUrls.length > 0) {
+        // 清理缓存，因为数据已更新
+        cacheManager.clearAllCaches();
+
+        const newImages = newUrls.map(url => ({
+          url: url,
+          selected: false,
+          id: generateId()
+        }));
+        
+        allImages = [...allImages, ...newImages];
+        filteredImages = [...allImages];
+        
+        // 更新计数并重新渲染
+        imageCount.textContent = allImages.length;
+        renderImages();
+        
+        // 异步获取新图片的详细信息
+        fetchImageDetails(newImages);
+      }
     }
   }
   
@@ -349,13 +339,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // 复制所有URL按钮
     copyAllBtn.addEventListener('click', function() {
       copyAllUrls();
-    });
-    
-    // 当新的图片被加载时，自动更新页面
-    chrome.storage.onChanged.addListener(function(changes, namespace) {
-      if (namespace === 'local' && changes.imageUrls) {
-        loadImagesFromStorage();
-      }
     });
     
     // 监听DOM变化，当新的图片项被添加到网格中时，确保它们有详细信息
@@ -795,127 +778,127 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  /**
-   * 打包下载选中的图片为ZIP
-   */
-  async function downloadZip() {
-    const selectedImages = allImages.filter(image => image.selected);
-    
-    if (selectedImages.length === 0) {
-      showToast('请先选择要下载的图片');
-      return;
-    }
-    
-    showToast(`开始准备打包 ${selectedImages.length} 个图片...`);
-    
-    try {
-      // 检查JSZip是否已加载
-      if (typeof JSZip === 'undefined') {
-        // 动态加载JSZip库
-        const script = document.createElement('script');
-        script.src = chrome.runtime.getURL('node_modules/jszip/dist/jszip.min.js');
-        document.head.appendChild(script);
-        
-        // 等待脚本加载
-        await new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = reject;
-        });
-      }
-      
-      // 创建JSZip实例
-      const zip = new JSZip();
-      
-      // 添加选中的图片到ZIP
-      const promises = selectedImages.map(async (image, index) => {
-        try {
-          // 获取文件名
-          let filename = image.url.split('/').pop();
-          if (!filename || filename.includes('?')) {
-            filename = `image_${Date.now()}_${index}.jpg`;
-          } else {
-            filename = filename.split('?')[0]; // 移除查询参数
-          }
-          
-          // 确保文件名不为空
-          if (!filename || filename === '.') {
-            filename = `image_${Date.now()}_${index}.jpg`;
-          }
-          
-          // 确保文件有扩展名
-          if (!/\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)$/i.test(filename)) {
-            const urlExtMatch = image.url.match(/\.([^.?#]+)(?:[?#]|$)/i);
-            if (urlExtMatch && urlExtMatch[1]) {
-              const ext = urlExtMatch[1].toLowerCase();
-              if (/(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)/i.test(ext)) {
-                filename += '.' + ext;
-              } else {
-                filename += '.jpg'; // 默认使用jpg
-              }
-            } else {
-              filename += '.jpg'; // 默认使用jpg
-            }
-          }
-          
-          // 获取图片数据
-          const response = await fetch(image.url);
-          if (!response.ok) {
-            throw new Error(`无法获取图片: ${image.url}`);
-          }
-          const blob = await response.blob();
-          
-          // 将图片添加到ZIP
-          zip.file(filename, blob);
-        } catch (error) {
-          console.error('添加图片到ZIP时出错:', error, image.url);
-        }
-      });
-      
-      // 等待所有图片处理完成
-      await Promise.all(promises);
-      
-      // 生成ZIP文件
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      
-      // 使用chrome.downloads API下载ZIP文件，显示保存对话框
-      const url = URL.createObjectURL(zipBlob);
-      const downloadOptions = {
-        url: url,
-        filename: `图片打包_${Date.now()}.zip`,
-        saveAs: true, // 显示保存对话框，让用户选择下载位置
-        conflictAction: 'uniquify' // 如果文件已存在，自动重命名
-      };
-      
-      // 发送下载请求到后台脚本，因为chrome.downloads API只能在后台使用
-      const downloadData = {
-        action: 'downloadZip',
-        downloadOptions: downloadOptions
-      };
-      
-      chrome.runtime.sendMessage(downloadData, function(response) {
-        if (chrome.runtime.lastError) {
-          console.error('发送下载请求失败:', chrome.runtime.lastError.message);
-          // 如果后台下载失败，回退到直接下载方式
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `图片打包_${Date.now()}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          showToast(`打包完成，已使用默认下载位置`);
-        } else if (response && response.success) {
-          showToast(`成功打包 ${selectedImages.length} 个图片，正在下载...`);
-        } else if (response && response.error) {
-          showToast('下载失败: ' + response.error);
-        }
-      });
-      
-      // 注意：URL.revokeObjectURL(url) 不能立即调用，因为后台脚本可能还在使用它
-      // 所以不立即撤销URL，让浏览器在下载完成后自动清理
-    } catch (error) {
-      console.error('打包ZIP时出错:', error);
-      showToast('打包失败: ' + error.message);
-    }
+  /**
+   * 打包下载选中的图片为ZIP
+   */
+  async function downloadZip() {
+    const selectedImages = allImages.filter(image => image.selected);
+    
+    if (selectedImages.length === 0) {
+      showToast('请先选择要下载的图片');
+      return;
+    }
+    
+    showToast(`开始准备打包 ${selectedImages.length} 个图片...`);
+    
+    try {
+      // 检查JSZip是否已加载
+      if (typeof JSZip === 'undefined') {
+        // 动态加载JSZip库
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('node_modules/jszip/dist/jszip.min.js');
+        document.head.appendChild(script);
+        
+        // 等待脚本加载
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+        });
+      }
+      
+      // 创建JSZip实例
+      const zip = new JSZip();
+      
+      // 添加选中的图片到ZIP
+      const promises = selectedImages.map(async (image, index) => {
+        try {
+          // 获取文件名
+          let filename = image.url.split('/').pop();
+          if (!filename || filename.includes('?')) {
+            filename = `image_${Date.now()}_${index}.jpg`;
+          } else {
+            filename = filename.split('?')[0]; // 移除查询参数
+          }
+          
+          // 确保文件名不为空
+          if (!filename || filename === '.') {
+            filename = `image_${Date.now()}_${index}.jpg`;
+          }
+          
+          // 确保文件有扩展名
+          if (!/\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)$/i.test(filename)) {
+            const urlExtMatch = image.url.match(/\.([^.?#]+)(?:[?#]|$)/i);
+            if (urlExtMatch && urlExtMatch[1]) {
+              const ext = urlExtMatch[1].toLowerCase();
+              if (/(jpg|jpeg|png|gif|bmp|webp|svg|ico|avif|tiff|tif)/i.test(ext)) {
+                filename += '.' + ext;
+              } else {
+                filename += '.jpg'; // 默认使用jpg
+              }
+            } else {
+              filename += '.jpg'; // 默认使用jpg
+            }
+          }
+          
+          // 获取图片数据
+          const response = await fetch(image.url);
+          if (!response.ok) {
+            throw new Error(`无法获取图片: ${image.url}`);
+          }
+          const blob = await response.blob();
+          
+          // 将图片添加到ZIP
+          zip.file(filename, blob);
+        } catch (error) {
+          console.error('添加图片到ZIP时出错:', error, image.url);
+        }
+      });
+      
+      // 等待所有图片处理完成
+      await Promise.all(promises);
+      
+      // 生成ZIP文件
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // 使用chrome.downloads API下载ZIP文件，显示保存对话框
+      const url = URL.createObjectURL(zipBlob);
+      const downloadOptions = {
+        url: url,
+        filename: `图片打包_${Date.now()}.zip`,
+        saveAs: true, // 显示保存对话框，让用户选择下载位置
+        conflictAction: 'uniquify' // 如果文件已存在，自动重命名
+      };
+      
+      // 发送下载请求到后台脚本，因为chrome.downloads API只能在后台使用
+      const downloadData = {
+        action: 'downloadZip',
+        downloadOptions: downloadOptions
+      };
+      
+      chrome.runtime.sendMessage(downloadData, function(response) {
+        if (chrome.runtime.lastError) {
+          console.error('发送下载请求失败:', chrome.runtime.lastError.message);
+          // 如果后台下载失败，回退到直接下载方式
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `图片打包_${Date.now()}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showToast(`打包完成，已使用默认下载位置`);
+        } else if (response && response.success) {
+          showToast(`成功打包 ${selectedImages.length} 个图片，正在下载...`);
+        } else if (response && response.error) {
+          showToast('下载失败: ' + response.error);
+        }
+      });
+      
+      // 注意：URL.revokeObjectURL(url) 不能立即调用，因为后台脚本可能还在使用它
+      // 所以不立即撤销URL，让浏览器在下载完成后自动清理
+    } catch (error) {
+      console.error('打包ZIP时出错:', error);
+      showToast('打包失败: ' + error.message);
+    }
   }
 
   /**
