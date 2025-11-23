@@ -13,6 +13,9 @@
 - **图片预览**: 直接在结果页面预览图片
 - **搜索过滤**: 支持实时搜索和过滤图片URL
 - **右键菜单**: 支持右键页面直接触发图片获取功能
+- **ZIP下载**: 将选中的图片打包为ZIP文件下载
+- **新标签页打开**: 在新标签页中打开选中的图片
+- **自动停止监听**: 当一段时间没有新图片时自动停止搜索
 
 ### 主要技术
 - **前端**: JavaScript (ES6+), HTML5, CSS3
@@ -20,23 +23,28 @@
 - **图标生成**: Python + Pygame
 - **存储**: Chrome Storage API
 - **模块化**: ES6 Modules (import/export)
+- **依赖管理**: npm (jszip, file-saver)
 
 ## 项目结构
 
 ```
-├── manifest.json          # 扩展清单文件 (Manifest V3)
-├── popup.html             # 扩展弹出窗口界面
-├── popup.js              # 弹出窗口逻辑脚本
-├── background.js         # Service Worker后台脚本
-├── content.js            # 内容脚本，注入到网页中
-├── results.html          # 结果展示页面
-├── results.js            # 结果页面逻辑 (ES6模块)
-├── styles.css            # 通用样式文件
-├── CacheManager.js       # 缓存管理器模块
-├── Image.js              # 图片对象类模块
-├── ImageProcessor.js     # 图片处理函数库
-├── generate_icons.py     # 图标生成脚本
-└── images/              # 图标资源目录
+├── manifest.json              # 扩展清单文件 (Manifest V3)
+├── popup.html               # 扩展弹出窗口界面
+├── popup.js                 # 弹出窗口逻辑脚本
+├── background.js            # Service Worker后台脚本
+├── content.js               # 内容脚本，注入到网页中
+├── results.html             # 结果展示页面
+├── results.js               # 结果页面逻辑 (ES6模块)
+├── styles.css               # 通用样式文件
+├── CacheManager.js          # 缓存管理器模块
+├── Image.js                 # 图片对象类模块
+├── ImageProcessor.js        # 图片处理函数库
+├── ImageCollectionManager.js # 图片收集状态管理器
+├── generate_icons.py        # 图标生成脚本
+├── package.json             # npm依赖配置
+├── package-lock.json        # npm依赖锁定
+├── node_modules/            # npm依赖库目录
+└── images/                  # 图标资源目录
     ├── icon16.png
     ├── icon48.png
     └── icon128.png
@@ -46,10 +54,14 @@
 
 ### 开发环境准备
 1. **Chrome浏览器**: 确保安装Chrome 88+版本以支持Manifest V3
-2. **Python环境**: 用于生成扩展图标（需要安装pygame库）
+2. **Node.js环境**: 用于安装扩展依赖 (jszip, file-saver)
+3. **Python环境**: 用于生成扩展图标（需要安装pygame库）
 
 ### 安装依赖
 ```bash
+# 安装JavaScript依赖库
+npm install jszip file-saver
+
 # 安装Python依赖（仅用于生成图标）
 pip install pygame
 ```
@@ -83,7 +95,10 @@ python generate_icons.py
 - **右键菜单**: 在任意网页右键，选择"获取页面所有图片"
 - **视图切换**: 在结果页面可在网格视图和列表视图间切换
 - **批量下载**: 选中多个图片后点击"下载选中"
+- **ZIP下载**: 选中多个图片后点击"打包下载ZIP"，弹出保存对话框选择路径
+- **新标签页打开**: 选中图片后点击"新标签页打开"
 - **URL复制**: 点击"复制所有URL"一键复制所有图片链接
+- **自动停止监听**: 当一段时间没有新图片时自动停止搜索，显示停止按钮
 
 ## 开发约定
 
@@ -102,13 +117,15 @@ python generate_icons.py
 - **缓存策略**: 使用`CacheManager`缓存排序和分类结果
 
 ### 模块职责
-- **background.js**: 处理扩展生命周期、消息路由、存储管理
+- **background.js**: 处理扩展生命周期、消息路由、存储管理、下载处理
 - **content.js**: 网页图片检测和URL提取
 - **popup.js**: 用户界面交互控制
 - **results.js**: 结果展示和用户操作
 - **CacheManager.js**: 通用缓存管理
 - **Image.js**: 图片对象封装
 - **ImageProcessor.js**: 纯函数式图片处理工具库
+- **ImageCollectionManager.js**: 图片收集状态管理
+- **manifest.json**: 权限和资源声明
 
 ### 数据流
 ```
@@ -122,7 +139,7 @@ python generate_icons.py
 ### 关键文件说明
 
 #### manifest.json
-扩展的配置文件，定义了扩展的基本信息、权限、脚本文件等。使用Manifest V3规范。
+扩展的配置文件，定义了扩展的基本信息、权限、脚本文件等。使用Manifest V3规范，包含了jszip库的web_accessible_resources声明。
 
 #### background.js
 Service Worker后台脚本，负责：
@@ -131,6 +148,7 @@ Service Worker后台脚本，负责：
 - 消息路由和传递
 - Chrome Storage数据管理
 - 标签页状态监控
+- 下载处理（包括ZIP下载）
 
 #### content.js
 注入到网页的内容脚本，负责：
@@ -152,12 +170,15 @@ Service Worker后台脚本，负责：
 - 搜索和过滤功能
 - 排序和分类功能
 - 批量选择和下载
+- ZIP下载功能
+- 新标签页打开功能
 - 图片预览和URL复制
 
 #### 核心模块
 - **CacheManager.js**: 提供缓存存储、获取、失效功能
 - **Image.js**: 封装图片对象，包含URL、尺寸、格式等信息
 - **ImageProcessor.js**: 提供纯函数式的排序、分类、过滤工具
+- **ImageCollectionManager.js**: 管理图片收集状态，实现自动停止监听
 
 ### 调试和测试
 
@@ -178,6 +199,7 @@ Service Worker后台脚本，负责：
 - **storage**: 存储图片数据
 - **tabs**: 管理标签页
 - **contextMenus**: 创建右键菜单
+- **downloads**: 处理下载请求（包括ZIP下载）
 - **host_permissions**: 访问所有网站图片资源
 
 ## 注意事项
@@ -186,7 +208,9 @@ Service Worker后台脚本，负责：
 2. **性能优化**: 大量图片时建议使用分类和过滤功能
 3. **存储限制**: Chrome storage有容量限制，大量数据请及时清理
 4. **兼容性**: 仅支持Chrome 88+版本，依赖Manifest V3特性
+5. **依赖库**: 使用jszip库实现ZIP打包功能，需要在manifest.json中声明
+6. **自动停止**: 图片收集功能会在一段时间无新图片时自动停止
 
 ---
 
-*本文档由iFlow CLI生成，最后更新: 2025-11-22*
+*本文档由iFlow CLI生成，最后更新: 2025-11-23*
